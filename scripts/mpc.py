@@ -6,8 +6,7 @@ The contacts forces are modeled as 6D wrenches.
 
 import numpy as np
 import example_robot_data
-import os 
-from simple_mpc import RobotHandler, FullDynamicsProblem, MPC
+from simple_mpc import RobotHandler, FullDynamicsProblem, KinodynamicsProblem, CentroidalProblem, MPC
 
 class TalosParameters():
     def __init__(self, mpc_type):
@@ -186,9 +185,7 @@ class TalosParameters():
 class Go2Parameters():
     def __init__(self, mpc_type):
         print(mpc_type)
-        #CURRENT_DIRECTORY = os.getcwd()
-        #urdfPath = CURRENT_DIRECTORY + '/src/cpp_pubsub/urdf/go2_description.urdf'
-
+        
         SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
         URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
         modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
@@ -223,36 +220,21 @@ class Go2Parameters():
         self.handler = RobotHandler()
         self.handler.initialize(design_conf)
 
-        q0 = np.array([0, 0, 0.335, 0, 0, 0, 1,
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-        ])
-        self.handler.updateConfiguration(q0, True)
-
         gravity = np.array([0, 0, -9.81])
         u0_forces = np.zeros(self.handler.getModel().nv + 6)
         for i in range(2):
             u0_forces[6 * i + 2] = -gravity[2] * self.handler.getMass() / 2
 
         if (mpc_type == "fulldynamics"):
-            w_x = np.array(
-                [0, 0, 0, 100, 100, 100,  # Base pos/ori
-                 1, 1, 1,  # FL
-                 1, 1, 1,  # FR
-                 1, 1, 1,  # RL
-                 1, 1, 1,  # RR
-                 1, 1, 1, 1, 1, 1,  # Base pos/ori vel
-                 0.1, 0.1, 0.1,  # FL
-                 0.1, 0.1, 0.1,  # FR
-                 0.1, 0.1, 0.1,  # RL
-                 0.1, 0.1, 0.1,  # RR
-                ]
-            )
-            w_cent_lin = np.array([0.0, 0.0, 10])
-            w_cent_ang = np.array([0., 0., 10])
-            w_forces_lin = np.ones(3) * 0.0001
+            w_basepos = [0, 0, 0, 100, 100, 100]
+            w_legpos = [1, 1, 1]
+
+            w_basevel = [1, 1, 1, 1, 1, 1]
+            w_legvel = [0.1, 0.1, 0.1]
+            w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
+            w_cent_lin = np.array([0.1, 0.1, 10])
+            w_cent_ang = np.array([0.1, 0.1, 1])
+            w_forces_lin = np.array([0.001, 0.001, 0.001])
 
             nu = self.handler.getModel().nv - 6
         
@@ -266,47 +248,41 @@ class Go2Parameters():
                 gravity=gravity,
                 force_size=3,
                 w_forces=np.diag(w_forces_lin),
-                w_frame=np.eye(3) * 2000,
+                w_frame=np.eye(3) * 1000,
                 umin=-self.handler.getModel().effortLimit[6:],
                 umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
                 mu=0.8,
-                Lfoot=0.1,
-                Wfoot=0.075,
+                Lfoot=0.01,
+                Wfoot=0.01,
             )
         elif (mpc_type == "kinodynamics"):
-            w_x = np.array(
-                [0, 0, 0, 100, 100, 100,  # Base pos/ori
-                 1, 1, 1,  # FL
-                 1, 1, 1,  # FR
-                 1, 1, 1,  # RL
-                 1, 1, 1,  # RR
-                 1, 1, 1, 1, 1, 1,  # Base pos/ori vel
-                 0.1, 0.1, 0.1,  # FL
-                 0.1, 0.1, 0.1,  # FR
-                 0.1, 0.1, 0.1,  # RL
-                 0.1, 0.1, 0.1,  # RR
-                ]
+            w_basepos = [0, 0, 0, 100, 100, 100]
+            w_legpos = [1, 1, 1]
+
+            w_basevel = [1, 1, 1, 1, 1, 1]
+            w_legvel = [0.1, 0.1, 0.1]
+            w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
+            w_x = np.diag(w_x)
+            w_linforce = np.array([0.01, 0.01, 0.01])
+            w_u = np.concatenate(
+                (
+                    w_linforce,
+                    w_linforce,
+                    w_linforce,
+                    w_linforce,
+                    np.ones(self.handler.getModel().nv - 6) * 1e-4,
+                )
             )
-            w_x = np.diag(w_x) * 10
-            w_linforce = np.array([0.001,0.001,0.01])
-            w_angforce = np.ones(3) * 0.1
-            w_u = np.concatenate((
-                w_linforce, 
-                w_angforce,
-                w_linforce, 
-                w_angforce,
-                np.ones(self.handler.getModel().nv - 6) * 1e-4
-            ))
-            w_u = np.diag(w_u) 
-            w_LFRF = 100000
-            w_cent_lin = np.array([0.0,0.0,1])
-            w_cent_ang = np.array([0.1,0.1,10])
-            w_cent = np.diag(np.concatenate((w_cent_lin,w_cent_ang)))
-            w_centder_lin = np.ones(3) * 0.
+            w_u = np.diag(w_u)
+            w_LFRF = 2000
+            w_cent_lin = np.array([0.0, 0.0, 1])
+            w_cent_ang = np.array([0.1, 0.1, 10])
+            w_cent = np.diag(np.concatenate((w_cent_lin, w_cent_ang)))
+            w_centder_lin = np.ones(3) * 0.0
             w_centder_ang = np.ones(3) * 0.1
-            w_centder = np.diag(np.concatenate((w_centder_lin,w_centder_ang)))
+            w_centder = np.diag(np.concatenate((w_centder_lin, w_centder_ang)))
 
             self.problem_conf = dict(
                 x0=self.handler.getState(),
@@ -318,11 +294,14 @@ class Go2Parameters():
                 w_centder=w_centder,
                 gravity=gravity,
                 force_size=3,
-                w_frame=np.eye(6) * w_LFRF,
+                w_frame=np.eye(3) * w_LFRF,
                 umin=-self.handler.getModel().effortLimit[6:],
                 umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
+                mu=0.8,
+                Lfoot=0.01,
+                Wfoot=0.01,
             )
         elif (mpc_type == "centroidal"):
             w_control_linear = np.ones(3) * 0.001
@@ -357,12 +336,19 @@ class ControlBlockGo2():
     def __init__(self, mpc_type):
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
-        self.T = 30
-
-        problem = FullDynamicsProblem(self.param.handler)
+        self.T = 50
+        
+        if mpc_type == "fulldynamics":
+            problem = FullDynamicsProblem(self.param.handler)
+        elif mpc_type == "kinodynamics":
+            problem = KinodynamicsProblem(self.param.handler)
+        elif mpc_type == "centroidal":
+            problem = CentroidalProblem(self.param.handler)
         problem.initialize(self.param.problem_conf)
         problem.createProblem(self.param.problem_conf["x0"], self.T, 3, self.param.problem_conf["gravity"][2])
-
+        
+        self.T_fly = 40
+        self.T_contact = 10
         mpc_conf = dict(
             ddpIteration=1,
             support_force=-self.param.handler.getMass() * self.param.problem_conf["gravity"][2],
@@ -370,11 +356,11 @@ class ControlBlockGo2():
             mu_init=1e-8,
             max_iters=1,
             num_threads=8,
-            swing_apex=0.1,
-            T_fly=20,
-            T_contact=20,
+            swing_apex=0.15,
+            T_fly=self.T_fly,
+            T_contact=self.T_contact,
             T=self.T,
-            x_translation=0.05,
+            x_translation=0.1,
             y_translation=0.0,
         )
 
@@ -383,12 +369,9 @@ class ControlBlockGo2():
         self.nq = self.param.handler.getModel().nq
     
     def create_gait(self):
-        """ Define gait and time parameters"""
-        T_ds = 20
-        T_ss = 20
-
         """ Define contact sequence throughout horizon"""
-        total_steps = 10
+        T_ds = self.T_contact
+        T_ss = self.T_fly
         contact_phase_quadru = {
             "FL_foot": True,
             "FR_foot": True,
@@ -407,19 +390,12 @@ class ControlBlockGo2():
             "RL_foot": False,
             "RR_foot": True,
         }
-        contact_phases = [contact_phase_quadru] * T_ds * 10
-        for s in range(total_steps):
-            contact_phases += (
-                [contact_phase_lift_FL] * T_ss
-                + [contact_phase_quadru] * T_ds
-                + [contact_phase_lift_FR] * T_ss
-                + [contact_phase_quadru] * T_ds
-            )
+        contact_phases = [contact_phase_quadru] * T_ds
+        contact_phases += [contact_phase_lift_FL] * T_ss
+        contact_phases += [contact_phase_quadru] * T_ds
+        contact_phases += [contact_phase_lift_FR] * T_ss
 
-        contact_phases += [contact_phase_quadru] * self.T
-
-        self.mpc.generateFullHorizon(contact_phases)
-        self.TfullHorizon = len(contact_phases)
+        self.mpc.generateCycleHorizon(contact_phases)
 
     def update_mpc(self, x_measured):
         self.mpc.iterate(x_measured[:self.nq],x_measured[self.nq:])
@@ -455,7 +431,6 @@ class ControlBlock():
         self.Nsimu = int(dt / 0.001)
 
         """ Define contact sequence throughout horizon"""
-        total_steps = 3
         contact_phase_double = {
             "left_sole_link" : True,
             "right_sole_link" : True,
@@ -469,15 +444,11 @@ class ControlBlock():
             "right_sole_link" : True,
         }
         contact_phases = [contact_phase_double] * T_ds
-        for s in range(total_steps):
-            contact_phases += [contact_phase_left] * T_ss + \
-                            [contact_phase_double] * T_ds + \
-                            [contact_phase_right] * T_ss + \
-                            [contact_phase_double] * T_ds 
+        contact_phases += [contact_phase_left] * T_ss
+        contact_phases += [contact_phase_double] * T_ds
+        contact_phases += [contact_phase_right] * T_ss 
 
-        contact_phases += [contact_phase_double] * self.T
-
-        self.mpc.generateFullHorizon(contact_phases)
+        self.mpc.generateCycleHorizon(contact_phases)
 
     def update_mpc(self, x_measured):
 

@@ -1,10 +1,7 @@
 import numpy as np
 import pinocchio as pin
-import os 
 import example_robot_data
-
-CURRENT_DIRECTORY = os.getcwd()
-URDF_DIRECTORY = CURRENT_DIRECTORY + '/src/cpp_pubsub/urdf'
+from simple_mpc import RobotHandler
 
 URDF_FILENAME = "talos_reduced.urdf"
 URDF_SUBPATH = "/talos_data/robots/" + URDF_FILENAME
@@ -50,7 +47,7 @@ def loadTalos():
     return robotComplete.model, rmodel, qComplete, q0, geom_model
 
 def loadGo2():
-    """ robot = example_robot_data.load("go2")
+    robot = example_robot_data.load("go2")
     rmodel = robot.model
     q0 = rmodel.referenceConfigurations["standing"]
 
@@ -62,22 +59,47 @@ def loadGo2():
         file_content = file.read()
 
     geom_model=pin.GeometryModel()
-    pin.buildGeomFromUrdfString(rmodel, file_content, pin.GeometryType.VISUAL, geom_model, package_dir) """
-    
-    package_dir = '/home/edantec/Documents/git/unitree_ros/robots'
-    urdf_path = package_dir + '/go2_description/urdf/go2_description.urdf'
-    rmodel = pin.buildModelFromUrdf(urdf_path, pin.JointModelFreeFlyer())
-
-    with open(urdf_path, 'r') as file:
-        file_content = file.read()
-    
-    geom_model=pin.GeometryModel()
     pin.buildGeomFromUrdfString(rmodel, file_content, pin.GeometryType.VISUAL, geom_model, package_dir)
-
-    #model, geom_model, _ = pin.buildModelsFromMJCF(PARENT_DIRECTORY + "/urdf/go2.xml")
     
     return rmodel, geom_model
 
+def loadHandlerGo2():
+    SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
+    URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
+
+    modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
+    design_conf = dict(
+        urdf_path=modelPath + URDF_SUBPATH,
+        srdf_path=modelPath + SRDF_SUBPATH,
+        robot_description="",
+        root_name="root_joint",
+        base_configuration="standing",
+        controlled_joints_names=[
+            "root_joint",
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint",
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint",
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint",
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint",
+        ],
+        end_effector_names=[
+            "FL_foot",
+            "FR_foot",
+            "RL_foot",
+            "RR_foot",
+        ],
+    )
+    handler = RobotHandler()
+    handler.initialize(design_conf)
+
+    return handler
 
 def computeCoP(LF_pose, RF_pose, LF_force, LF_torque, RF_force, RF_torque):
     cop_total = np.zeros(3)

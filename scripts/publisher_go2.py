@@ -31,17 +31,22 @@ class MpcPublisher(Node):
     def __init__(self):
         super().__init__('mpc_publisher')
         self.declare_parameter('mpc_type', 'fulldynamics')
+        self.parameter = self.get_parameter('mpc_type')
         qos_profile = QoSProfile(depth=10)
+        
         self.publisher_ = self.create_publisher(Torque, 'command', qos_profile)
         timer_period = 0.01  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
-        parameter = self.get_parameter('mpc_type')
 
-        self.mpc_block = ControlBlockGo2(parameter.value)
+        self.mpc_block = ControlBlockGo2(self.parameter.value)
         self.mpc_block.create_gait()
-
+        self.mpc_block.mpc.switchToStand()
+        self.timeToWalk = 0
+        
+        self.force_dim = 12
         self.ndx = self.mpc_block.param.handler.getModel().nv * 2
         self.nu = self.mpc_block.param.handler.getModel().nv - 6
+        self.nv = self.mpc_block.param.handler.getModel().nv
         self.x0 = self.mpc_block.param.handler.getState()
         self.position = np.zeros(self.nu)
         self.velocity = np.zeros(self.nu)
@@ -82,21 +87,36 @@ class MpcPublisher(Node):
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
 
     def timer_callback(self):
+        self.timeToWalk +=1
+        if (self.timeToWalk == 200):
+            self.mpc_block.mpc.switchToWalk()
+        
+        if (self.timeToWalk == 1000):
+            self.mpc_block.mpc.switchToStand()
+        
+        if (self.timeToWalk == 1500):
+            self.mpc_block.mpc.switchToWalk()
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
-        msg.x0 = self.x0.tolist()
-        msg.u0 = self.mpc_block.mpc.us[0].tolist()
-        K0 = self.mpc_block.mpc.K0.tolist()
-        riccati = []
-        for k in K0:
-            riccati += k
-        msg.riccati = riccati
-        msg.ndx = self.ndx
-        msg.nu = self.nu
+        if self.parameter.value == "fulldynamics":
+            msg.x0 = self.x0.tolist()
+            msg.u0 = self.mpc_block.mpc.us[0].tolist()
+            K0 = self.mpc_block.mpc.K0.tolist()
+            riccati = []
+            for k in K0:
+                riccati += k
+            msg.riccati = riccati
+            msg.ndx = self.ndx
+            msg.nu = self.nu
+        elif self.parameter.value == "kinodynamics":
+            a0 = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[0]\
+                .dynamics_data.continuous_data.xdot[self.nv:]
+            a0[6:] = self.mpc_block.mpc.us[0][self.force_dim:]
+            msg.a0 = a0.tolist()
+            msg.forces = self.mpc_block.mpc.us[0][:self.force_dim].tolist()
+            msg.contact_states = self.mpc_block.mpc.getTrajOptProblem().stages[0].dynamics.differential_dynamics.contact_states.tolist()
         self.publisher_.publish(msg)
         #self.get_logger().info('Publishing: "%s"' % msg.x0[0])
-
-        
 
 
 def main(args=None):

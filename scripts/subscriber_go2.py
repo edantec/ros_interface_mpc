@@ -24,6 +24,7 @@ from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster, TransformStamped
 from geometry_msgs.msg import Quaternion
 from rclpy.qos import QoSProfile
+from simple_mpc import IDSolver
 
 from simulation_args import SimulationArgs
 from simulation_utils import (
@@ -34,7 +35,7 @@ from simulation_utils import (
     addSystemCollisionPairs
 )
 
-from robot_utils import loadGo2
+from robot_utils import loadGo2, loadHandlerGo2
 from aligator import manifolds
 
 class SimulationWrapper():
@@ -72,7 +73,7 @@ class MpcSubscriber(Node):
         # Initialization of node
         super().__init__('mpc_subscriber')
         self.declare_parameter('mpc_type', 'fulldynamics')
-        parameter = self.get_parameter('mpc_type')
+        self.parameter = self.get_parameter('mpc_type')
         self.start_mpc = False
         
         # Define state publisher
@@ -159,18 +160,44 @@ class MpcSubscriber(Node):
         gain = 100
         self.Kp = np.identity(self.nu) * gain
         self.Kd = np.identity(self.nu) * 1
-        
+
         # Build whole-body control layer depending on the
         # type of MPC in use
         self.WB_solver = None
+
+        if self.parameter.value == "kinodynamics":
+            self.handler = loadHandlerGo2()
+            
+            contact_ids = self.handler.getFeetIds()
+            id_conf = dict(
+                contact_ids=contact_ids,
+                x0=self.handler.getState(),
+                mu=0.8,
+                Lfoot=0.01,
+                Wfoot=0.01,
+                force_size=3,
+                kd=0,
+                w_force=100,
+                w_acc=1,
+                verbose=False,
+            )
+
+            self.WB_solver = IDSolver()
+            self.WB_solver.initialize(id_conf, self.handler.getModel())
             
 
     def listener_callback(self, msg):
         #self.get_logger().info('I heard: "%s"' % msg.x0[0])
+        
+        if self.parameter.value == "fulldynamics":
+            self.u0 = np.array(msg.u0.tolist())
+            self.x0 = np.array(msg.x0.tolist())
+            self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
+        elif self.parameter.value == "kinodynamics":
+            self.contact_states = msg.contact_states
+            self.forces = np.array(msg.forces)
+            self.a0 = np.array(msg.a0)
 
-        self.u0 = np.array(msg.u0.tolist())
-        self.x0 = np.array(msg.x0.tolist())
-        self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
         self.start_mpc = True
     
     def timer_callback(self):
@@ -179,8 +206,20 @@ class MpcSubscriber(Node):
         if not(self.start_mpc):
             self.current_torque = self.u0 - self.Kp @ (q_current[7:] - self.x0[7:self.nq]) - self.Kd @ v_current[6:]
         else:
-            x_measured = np.concatenate((q_current, v_current))
-            self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
+            if self.parameter.value == "fulldynamics":
+                x_measured = np.concatenate((q_current, v_current))
+                self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
+            elif self.parameter.value == "kinodynamics":
+                self.handler.updateState(q_current, v_current, True)
+                self.WB_solver.solve_qp(
+                    self.handler.getData(),
+                    self.contact_states,
+                    v_current,
+                    self.a0,
+                    self.forces,
+                    self.handler.getMassMatrix(),
+                )
+                self.current_torque = self.WB_solver.solved_torque
         self.torque_simu[6:] = self.current_torque
         self.wrapper.simulator.execute(self.torque_simu)
 
