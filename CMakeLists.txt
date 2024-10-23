@@ -49,7 +49,6 @@ install(PROGRAMS
   scripts/publisher_go2.py
   scripts/subscriber.py
   scripts/subscriber_go2.py
-  scripts/subscriber_go2_kino.py
   scripts/mpc.py
   scripts/robot_utils.py
   scripts/simulation_args.py

@@ -72,7 +72,7 @@ class MpcSubscriber(Node):
     def __init__(self):
         # Initialization of node
         super().__init__('mpc_subscriber')
-        self.declare_parameter('mpc_type', 'fulldynamics')
+        self.declare_parameter('mpc_type')
         self.parameter = self.get_parameter('mpc_type')
         self.start_mpc = False
         

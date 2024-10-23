@@ -30,15 +30,17 @@ class MpcPublisher(Node):
 
     def __init__(self):
         super().__init__('mpc_publisher')
-        self.declare_parameter('mpc_type', 'fulldynamics')
+        self.declare_parameter('mpc_type')
+        self.declare_parameter('motion_type')
         self.parameter = self.get_parameter('mpc_type')
+        self.motion = self.get_parameter('motion_type')
         qos_profile = QoSProfile(depth=10)
         
         self.publisher_ = self.create_publisher(Torque, 'command', qos_profile)
         timer_period = 0.01  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
-        self.mpc_block = ControlBlockGo2(self.parameter.value)
+        self.mpc_block = ControlBlockGo2(self.parameter.value, self.motion.value)
         self.mpc_block.create_gait()
         self.mpc_block.mpc.switchToStand()
         self.timeToWalk = 0

@@ -23,6 +23,8 @@ def generate_launch_description():
   use_robot_state_pub = LaunchConfiguration('use_robot_state_pub')
   use_rviz = LaunchConfiguration('use_rviz')
   use_sim_time = LaunchConfiguration('use_sim_time')
+  mpc_type = LaunchConfiguration('mpc_type')
+  motion_type = LaunchConfiguration('motion_type')
 
   # Declare the launch arguments  
   declare_robot_name_cmd = DeclareLaunchArgument(
@@ -54,7 +56,17 @@ def generate_launch_description():
     name='use_sim_time',
     default_value='True',
     description='Use simulation (Gazebo) clock if true')
-   
+  
+  declare_mpc_type = DeclareLaunchArgument(
+    name='mpc_type',
+    default_value='fulldynamics',
+    description='Dynamic model used by MPC')
+
+  declare_motion_type = DeclareLaunchArgument(
+    name='motion_type',
+    default_value='walk',
+    description='Motion type to execute')
+  
   # Specify the actions
 
   # Subscribe to the joint states of the robot, and publish the 3D pose of each link.
@@ -71,13 +83,15 @@ def generate_launch_description():
     package='ros_interface_mpc',
     executable='subscriber_go2.py',
     name='subscriber',
-    output='screen')
+    output='screen',
+    parameters=[{"mpc_type": mpc_type}])
   
   start_control_node = Node(
     package='ros_interface_mpc',
     executable='publisher_go2.py',
     name='publisher',
-    output='screen')
+    output='screen',
+    parameters=[{"mpc_type": mpc_type, "motion_type" : motion_type}])
 
   # Launch RViz
   start_rviz_cmd = Node(
@@ -98,6 +112,8 @@ def generate_launch_description():
   ld.add_action(declare_use_robot_state_pub_cmd)  
   ld.add_action(declare_use_rviz_cmd) 
   ld.add_action(declare_use_sim_time_cmd)
+  ld.add_action(declare_mpc_type)
+  ld.add_action(declare_motion_type)
 
   # Add any actions
   ld.add_action(start_control_node)

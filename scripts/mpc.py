@@ -226,13 +226,13 @@ class Go2Parameters():
             u0_forces[6 * i + 2] = -gravity[2] * self.handler.getMass() / 2
 
         if (mpc_type == "fulldynamics"):
-            w_basepos = [0, 0, 0, 100, 100, 100]
+            w_basepos = [0, 0, 0, 1, 1, 1]
             w_legpos = [1, 1, 1]
 
             w_basevel = [1, 1, 1, 1, 1, 1]
             w_legvel = [0.1, 0.1, 0.1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
-            w_cent_lin = np.array([0.1, 0.1, 10])
+            w_cent_lin = np.array([0.1, 0.1, 1])
             w_cent_ang = np.array([0.1, 0.1, 1])
             w_forces_lin = np.array([0.001, 0.001, 0.001])
 
@@ -261,7 +261,7 @@ class Go2Parameters():
             w_basepos = [0, 0, 0, 100, 100, 100]
             w_legpos = [1, 1, 1]
 
-            w_basevel = [1, 1, 1, 1, 1, 1]
+            w_basevel = [1, 1, 1, 100, 100, 100]
             w_legvel = [0.1, 0.1, 0.1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
             w_x = np.diag(w_x)
@@ -303,52 +303,33 @@ class Go2Parameters():
                 Lfoot=0.01,
                 Wfoot=0.01,
             )
-        elif (mpc_type == "centroidal"):
-            w_control_linear = np.ones(3) * 0.001
-            w_control_angular = np.ones(3) * 0.1
-            w_control = np.diag(np.concatenate((
-                w_control_linear,
-                w_control_angular,
-                w_control_linear,
-                w_control_angular
-            )))
-
-            self.problem_conf = dict(
-                x0=self.handler.getState(),
-                u0=u0_forces,
-                DT=0.01,
-                w_x=w_x,
-                w_u=w_control,
-                w_centroidal_com=np.diag(np.array([0,0,0])),
-                w_linear_mom=np.diag(np.array([0.01,0.01,100])),
-                w_linear_acc=0.01 * np.eye(3),
-                w_angular_mom=np.diag(np.array([0.1,0.1,1000])),
-                w_angular_acc=0.01 * np.eye(3),
-                gravity=gravity,
-                force_size=3,
-            )
         else:
             print("Error: MPC type not recognized")
             exit()
 
 
 class ControlBlockGo2():
-    def __init__(self, mpc_type):
+    def __init__(self, mpc_type, motion):
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
-        self.T = 50
+        self.motion = motion
+        self.T = 40
         
         if mpc_type == "fulldynamics":
             problem = FullDynamicsProblem(self.param.handler)
         elif mpc_type == "kinodynamics":
             problem = KinodynamicsProblem(self.param.handler)
-        elif mpc_type == "centroidal":
-            problem = CentroidalProblem(self.param.handler)
         problem.initialize(self.param.problem_conf)
         problem.createProblem(self.param.problem_conf["x0"], self.T, 3, self.param.problem_conf["gravity"][2])
         
-        self.T_fly = 40
-        self.T_contact = 10
+        if self.motion == "walk":
+            self.T_fly = 40
+            self.T_contact = 10
+            x_translation = 0.1
+        elif self.motion == "jump":
+            self.T_fly = 15
+            self.T_contact = 80
+            x_translation = 0.3
         mpc_conf = dict(
             ddpIteration=1,
             support_force=-self.param.handler.getMass() * self.param.problem_conf["gravity"][2],
@@ -360,7 +341,7 @@ class ControlBlockGo2():
             T_fly=self.T_fly,
             T_contact=self.T_contact,
             T=self.T,
-            x_translation=0.1,
+            x_translation=x_translation,
             y_translation=0.0,
         )
 
@@ -370,8 +351,6 @@ class ControlBlockGo2():
     
     def create_gait(self):
         """ Define contact sequence throughout horizon"""
-        T_ds = self.T_contact
-        T_ss = self.T_fly
         contact_phase_quadru = {
             "FL_foot": True,
             "FR_foot": True,
@@ -390,10 +369,22 @@ class ControlBlockGo2():
             "RL_foot": False,
             "RR_foot": True,
         }
-        contact_phases = [contact_phase_quadru] * T_ds
-        contact_phases += [contact_phase_lift_FL] * T_ss
-        contact_phases += [contact_phase_quadru] * T_ds
-        contact_phases += [contact_phase_lift_FR] * T_ss
+        contact_phase_lift_all = {
+            "FL_foot": False,
+            "FR_foot": False,
+            "RL_foot": False,
+            "RR_foot": False,
+        }
+        contact_phases = []
+        if self.motion == "walk":
+            contact_phases = [contact_phase_quadru] * self.T_contact
+            contact_phases += [contact_phase_lift_FL] * self.T_fly
+            contact_phases += [contact_phase_quadru] * self.T_contact
+            contact_phases += [contact_phase_lift_FR] * self.T_fly
+        elif self.motion == "jump":
+            contact_phases = [contact_phase_quadru] * self.T_contact
+            contact_phases += [contact_phase_lift_all] * self.T_fly
+            contact_phases += [contact_phase_quadru] * self.T_contact 
 
         self.mpc.generateCycleHorizon(contact_phases)
 
