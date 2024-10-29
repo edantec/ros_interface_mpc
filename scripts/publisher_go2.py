@@ -91,13 +91,17 @@ class MpcPublisher(Node):
     def timer_callback(self):
         self.timeToWalk +=1
         if (self.timeToWalk == 200):
-            self.mpc_block.mpc.switchToWalk()
+            v = pin.Motion.Zero()
+            v.linear[0] = 0.1
+            self.mpc_block.mpc.switchToWalk(v)
         
         if (self.timeToWalk == 1000):
             self.mpc_block.mpc.switchToStand()
         
         if (self.timeToWalk == 1500):
-            self.mpc_block.mpc.switchToWalk()
+            v = pin.Motion.Zero()
+            v.linear[0] = 0.1
+            self.mpc_block.mpc.switchToWalk(v)
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
         if self.parameter.value == "fulldynamics":
