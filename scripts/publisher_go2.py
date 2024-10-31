@@ -90,17 +90,17 @@ class MpcPublisher(Node):
 
     def timer_callback(self):
         self.timeToWalk +=1
-        if (self.timeToWalk == 200):
-            v = pin.Motion.Zero()
-            v.linear[0] = 0.1
+        if (self.timeToWalk == 100):
+            v = np.zeros(6)
+            v[0] = 0.1
             self.mpc_block.mpc.switchToWalk(v)
         
-        if (self.timeToWalk == 1000):
+        if (self.timeToWalk == 700):
             self.mpc_block.mpc.switchToStand()
         
-        if (self.timeToWalk == 1500):
-            v = pin.Motion.Zero()
-            v.linear[0] = 0.1
+        if (self.timeToWalk == 1000):
+            v = np.zeros(6)
+            v[5] = 0.2
             self.mpc_block.mpc.switchToWalk(v)
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()

@@ -216,6 +216,12 @@ class Go2Parameters():
                 "RL_foot",
                 "RR_foot",
             ],
+            hip_names=[
+                "FL_thigh",
+                "FR_thigh",
+                "RL_thigh",
+                "RR_thigh",
+            ],
         )
         self.handler = RobotHandler()
         self.handler.initialize(design_conf)
@@ -229,19 +235,16 @@ class Go2Parameters():
             w_basepos = [0, 0, 0, 0, 0, 0]
             w_legpos = [1, 1, 1]
 
-            w_basevel = [0, 0, 0, 0, 0, 0]
+            w_basevel = [10, 10, 10, 10, 10, 10]
             w_legvel = [0.1, 0.1, 0.1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
-            w_cent_lin = np.array([0., 0., 1])
-            w_cent_ang = np.array([0., 0., 1])
+            w_cent_lin = np.array([0.1, 0.1, 1])
+            w_cent_ang = np.array([0.1, 0.1, 1])
             w_forces_lin = np.array([0.001, 0.001, 0.001])
-            w_vbase = np.eye(6) * 10
 
             nu = self.handler.getModel().nv - 6
         
             self.problem_conf = dict(
-                x0=self.handler.getState(),
-                u0=np.zeros(nu),
                 DT=0.01,
                 w_x=np.diag(w_x),
                 w_u=np.eye(nu) * 1e-4,
@@ -250,7 +253,6 @@ class Go2Parameters():
                 force_size=3,
                 w_forces=np.diag(w_forces_lin),
                 w_frame=np.eye(3) * 1000,
-                w_vbase=w_vbase,
                 umin=-self.handler.getModel().effortLimit[6:],
                 umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
@@ -263,7 +265,7 @@ class Go2Parameters():
             w_basepos = [0, 0, 0, 0, 0, 0]
             w_legpos = [1, 1, 1]
 
-            w_basevel = [0, 0, 0, 0, 0, 0]
+            w_basevel = [10, 10, 10, 10, 10, 10]
             w_legvel = [0.1, 0.1, 0.1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
             w_x = np.diag(w_x)
@@ -280,16 +282,13 @@ class Go2Parameters():
             w_u = np.diag(w_u)
             w_LFRF = 1000
             w_cent_lin = np.array([0.1, 0.1, 1])
-            w_cent_ang = np.array([0.1, 0.1, 10])
+            w_cent_ang = np.array([0.1, 0.1, 1])
             w_cent = np.diag(np.concatenate((w_cent_lin, w_cent_ang)))
             w_centder_lin = np.ones(3) * 0.0
             w_centder_ang = np.ones(3) * 0.1
             w_centder = np.diag(np.concatenate((w_centder_lin, w_centder_ang)))
-            w_vbase = np.eye(6) * 10
 
             self.problem_conf = dict(
-                x0=self.handler.getState(),
-                u0=u0_forces,
                 DT=0.01,
                 w_x=w_x,
                 w_u=w_u,
@@ -298,7 +297,6 @@ class Go2Parameters():
                 gravity=gravity,
                 force_size=3,
                 w_frame=np.eye(3) * w_LFRF,
-                w_vbase=w_vbase,
                 umin=-self.handler.getModel().effortLimit[6:],
                 umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
@@ -324,16 +322,14 @@ class ControlBlockGo2():
         elif mpc_type == "kinodynamics":
             problem = KinodynamicsProblem(self.param.handler)
         problem.initialize(self.param.problem_conf)
-        problem.createProblem(self.param.problem_conf["x0"], self.T, 3, self.param.problem_conf["gravity"][2])
+        problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
         
         if self.motion == "walk":
             self.T_fly = 40
             self.T_contact = 10
-            x_translation = 0.1
         elif self.motion == "jump":
-            self.T_fly = 10
-            self.T_contact = 80
-            x_translation = 0.3
+            self.T_fly = 20
+            self.T_contact = 100
         mpc_conf = dict(
             ddpIteration=1,
             support_force=-self.param.handler.getMass() * self.param.problem_conf["gravity"][2],
@@ -341,7 +337,7 @@ class ControlBlockGo2():
             mu_init=1e-8,
             max_iters=1,
             num_threads=8,
-            swing_apex=0.15,
+            swing_apex=0.3,
             T_fly=self.T_fly,
             T_contact=self.T_contact,
             T=self.T,
