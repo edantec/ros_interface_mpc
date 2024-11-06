@@ -92,16 +92,28 @@ class MpcPublisher(Node):
         self.timeToWalk +=1
         if (self.timeToWalk == 100):
             v = np.zeros(6)
-            v[0] = 0.1
+            v[5] = 0.3
             self.mpc_block.mpc.switchToWalk(v)
-        
-        if (self.timeToWalk == 700):
-            self.mpc_block.mpc.switchToStand()
         
         if (self.timeToWalk == 1000):
+            self.mpc_block.mpc.switchToStand()
+        
+        """ if (self.timeToWalk == 600):
             v = np.zeros(6)
-            v[5] = 0.2
+            v[5] = 0.4
             self.mpc_block.mpc.switchToWalk(v)
+        
+        if (self.timeToWalk == 1000):
+            self.mpc_block.mpc.switchToStand()
+        
+        if (self.timeToWalk == 1100):
+            v = np.zeros(6)
+            v[0] = -0.3
+            self.mpc_block.mpc.switchToWalk(v)
+        
+        if (self.timeToWalk == 1500):
+            self.mpc_block.mpc.switchToStand() """
+
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
         if self.parameter.value == "fulldynamics":

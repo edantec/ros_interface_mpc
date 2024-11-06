@@ -15,6 +15,8 @@ find_package(tf2 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED) 
 find_package(PkgConfig REQUIRED)
+find_package(simple-mpc REQUIRED)
+find_package(example-robot-data REQUIRED)
 pkg_search_module(EIGEN REQUIRED eigen3)
 include_directories(${EIGEN_INCLUDE_DIRS})
 find_package(rosidl_default_generators REQUIRED)
@@ -35,8 +37,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 #add_executable(talker src/publisher_member_function.cpp)
-#ament_target_dependencies(talker rclcpp std_msgs)
-
+#target_link_libraries(talker example-robot-data::example-robot-data simple-mpc::simple-mpc)
+#ament_target_dependencies(talker rclcpp std_msgs simple-mpc)
 #add_executable(listener src/subscriber_member_function.cpp)
 #ament_target_dependencies(listener rclcpp std_msgs)
 
@@ -74,9 +76,9 @@ if(BUILD_TESTING)
 endif()
 
 #install(TARGETS
-#  talker
-#  listener
-#  DESTINATION lib/${PROJECT_NAME})
+  #talker
+  #listener
+  #DESTINATION lib/${PROJECT_NAME})
 
 ament_export_dependencies(rosidl_default_runtime)
 

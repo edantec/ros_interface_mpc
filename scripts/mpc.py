@@ -235,7 +235,7 @@ class Go2Parameters():
             w_basepos = [0, 0, 0, 0, 0, 0]
             w_legpos = [1, 1, 1]
 
-            w_basevel = [10, 10, 10, 10, 10, 10]
+            w_basevel = [0, 0, 0, 10, 10, 10]
             w_legvel = [0.1, 0.1, 0.1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
             w_cent_lin = np.array([0.1, 0.1, 1])
@@ -260,6 +260,9 @@ class Go2Parameters():
                 mu=0.8,
                 Lfoot=0.01,
                 Wfoot=0.01,
+                torque_limits=False,
+                kinematics_limits=False,
+                force_cone=False,
             )
         elif (mpc_type == "kinodynamics"):
             w_basepos = [0, 0, 0, 0, 0, 0]
@@ -304,6 +307,8 @@ class Go2Parameters():
                 mu=0.8,
                 Lfoot=0.01,
                 Wfoot=0.01,
+                kinematics_limits=False,
+                force_cone=False,
             )
         else:
             print("Error: MPC type not recognized")
@@ -325,8 +330,8 @@ class ControlBlockGo2():
         problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
         
         if self.motion == "walk":
-            self.T_fly = 40
-            self.T_contact = 10
+            self.T_fly = 30
+            self.T_contact = 5
         elif self.motion == "jump":
             self.T_fly = 20
             self.T_contact = 100
