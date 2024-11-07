@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
+#cmake_policy(SET CMP0148 NEW)
+#cmake_policy(SET CMP0167 NEW)
 project(ros_interface_mpc)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -8,19 +10,20 @@ endif()
 include(FetchContent)
 
 # find dependencies
+
 find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclpy REQUIRED)
+#find_package(rclcpp REQUIRED)
+#find_package(rclpy REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED) 
-find_package(PkgConfig REQUIRED)
-find_package(simple-mpc REQUIRED)
-find_package(example-robot-data REQUIRED)
-pkg_search_module(EIGEN REQUIRED eigen3)
-include_directories(${EIGEN_INCLUDE_DIRS})
-find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+#find_package(PkgConfig REQUIRED)
+#find_package(simple-mpc REQUIRED)
+#find_package(example-robot-data REQUIRED)
+#pkg_search_module(EIGEN REQUIRED eigen3)
+#include_directories(${EIGEN_INCLUDE_DIRS})
+find_package(rosidl_default_generators REQUIRED)
 
 # Install Python modules
 #ament_python_install_package(${PROJECT_NAME})
@@ -47,9 +50,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 # Install Python executables
 install(PROGRAMS
-  scripts/publisher.py
+  scripts/publisher_talos.py
   scripts/publisher_go2.py
-  scripts/subscriber.py
+  scripts/subscriber_talos.py
   scripts/subscriber_go2.py
   scripts/mpc.py
   scripts/robot_utils.py
