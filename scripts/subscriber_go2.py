@@ -163,7 +163,9 @@ class MpcSubscriber(Node):
 
         # Build whole-body control layer depending on the
         # type of MPC in use
-        self.WB_solver = Noneproxsuite_nlpnodynamics":
+        self.WB_solver = None
+
+        if self.parameter.value == "kinodynamics":
             self.handler = loadHandlerGo2()
             
             contact_ids = self.handler.getFeetIds()

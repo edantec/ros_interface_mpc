@@ -11,18 +11,19 @@ include(FetchContent)
 
 # find dependencies
 
+find_package (Python COMPONENTS Interpreter Development)
 find_package(ament_cmake REQUIRED)
-#find_package(rclcpp REQUIRED)
-#find_package(rclpy REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED) 
 find_package(builtin_interfaces REQUIRED)
-#find_package(PkgConfig REQUIRED)
-#find_package(simple-mpc REQUIRED)
-#find_package(example-robot-data REQUIRED)
-#pkg_search_module(EIGEN REQUIRED eigen3)
-#include_directories(${EIGEN_INCLUDE_DIRS})
+find_package(PkgConfig REQUIRED)
+find_package(simple-mpc REQUIRED)
+find_package(example-robot-data REQUIRED)
+pkg_search_module(EIGEN REQUIRED eigen3)
+include_directories(${EIGEN_INCLUDE_DIRS})
 find_package(rosidl_default_generators REQUIRED)
 
 # Install Python modules
