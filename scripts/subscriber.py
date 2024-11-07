@@ -40,7 +40,7 @@ from QP_utils import (
     IDSolver,
     IKIDSolver_f6,
 )
-from aligator import manifolds
+from proxsuite_nlp import manifolds
 
 class SimulationWrapper():
 

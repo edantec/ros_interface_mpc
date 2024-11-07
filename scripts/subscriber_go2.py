@@ -36,7 +36,7 @@ from simulation_utils import (
 )
 
 from robot_utils import loadGo2, loadHandlerGo2
-from aligator import manifolds
+from proxsuite_nlp import manifolds
 
 class SimulationWrapper():
 
@@ -163,9 +163,7 @@ class MpcSubscriber(Node):
 
         # Build whole-body control layer depending on the
         # type of MPC in use
-        self.WB_solver = None
-
-        if self.parameter.value == "kinodynamics":
+        self.WB_solver = Noneproxsuite_nlpnodynamics":
             self.handler = loadHandlerGo2()
             
             contact_ids = self.handler.getFeetIds()
