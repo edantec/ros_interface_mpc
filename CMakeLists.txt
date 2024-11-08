@@ -55,6 +55,7 @@ install(PROGRAMS
   scripts/publisher_go2.py
   scripts/subscriber_talos.py
   scripts/subscriber_go2.py
+  scripts/subscriber_test.py
   scripts/mpc.py
   scripts/robot_utils.py
   scripts/simulation_args.py
