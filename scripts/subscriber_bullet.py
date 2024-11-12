@@ -26,53 +26,51 @@ from geometry_msgs.msg import Quaternion
 from rclpy.qos import QoSProfile
 from simple_mpc import IDSolver
 
-from simulation_args import SimulationArgs
-from simulation_utils import (
-    addFloor,
-    removeBVHModelsIfAny,
-    setPhysicsProperties,
-    Simulation,
-    addSystemCollisionPairs
-)
+from bullet_robot import BulletRobot
 
 from robot_utils import loadGo2, loadHandlerGo2
 from proxsuite_nlp import manifolds
+import example_robot_data
 
 class SimulationWrapper():
 
     def __init__(self):
+        URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
+        modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
+        controlled_joints_names=[
+            "root_joint",
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint",
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint",
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint",
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint",
+        ]
         # Load the robot model 
         self.rmodel, geom_model = loadGo2()
-        v0 = np.zeros(self.rmodel.nv)
-        args = SimulationArgs()
-        np.random.seed(args.seed)
-        pin.seed(args.seed)
+        """ Initialize simulation"""
         q0 = np.array([0, 0, 0.335, 0, 0, 0, 1,
             0.068, 0.785, -1.440,
             -0.068, 0.785, -1.440,
             0.068, 0.785, -1.440,
             -0.068, 0.785, -1.440,
         ])
-        # Add plane in geom_model
-        visual_model = geom_model.copy()
-        addFloor(geom_model, visual_model)
-
-        # Set simulation properties
-        setPhysicsProperties(geom_model, args.material, args.compliance)
-        removeBVHModelsIfAny(geom_model)
-        addSystemCollisionPairs(self.rmodel, geom_model, q0)
-
-        # Remove all pair of collision which does not concern floor collision
-        i = 0
-        while i < len(geom_model.collisionPairs):
-            cp = geom_model.collisionPairs[i]
-            if geom_model.geometryObjects[cp.first].name != 'floor' and geom_model.geometryObjects[cp.second].name != 'floor':
-                geom_model.removeCollisionPair(cp)
-            else:
-                i = i + 1
-        
-        # Create the simulator object
-        self.simulator = Simulation(self.rmodel, geom_model, visual_model, q0, v0, args) 
+        self.device = BulletRobot(
+            controlled_joints_names,
+            modelPath,
+            URDF_SUBPATH,
+            1e-3,
+            self.rmodel,
+            q0[:3],
+        )
+        self.device.initializeJoints(q0)
+        self.device.changeCamera(1.0, 60, -15, [0.6, -0.2, 0.5])
 
 
 
@@ -153,7 +151,7 @@ class MpcSubscriber(Node):
         
         # Initial state of the robot with feedforward torque equal to
         # gravity-compensating torque in half-sitting
-        q_current, v_current = self.wrapper.simulator.get_state()
+        q_current, v_current = self.wrapper.device.measureState()
     
         self.x0 = np.concatenate((q_current, v_current))
         self.u0 = np.array([-3.71, -1.81,  5.25,  
@@ -198,39 +196,22 @@ class MpcSubscriber(Node):
     def listener_callback(self, msg):
         #self.get_logger().info('I heard: "%s"' % msg.x0[0])
         
-        if self.parameter.value == "fulldynamics":
-            self.u0 = np.array(msg.u0.tolist())
-            self.x0 = np.array(msg.x0.tolist())
-            self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
-        elif self.parameter.value == "kinodynamics":
-            self.contact_states = msg.contact_states
-            self.forces = np.array(msg.forces)
-            self.a0 = np.array(msg.a0)
+        self.u0 = np.array(msg.u0.tolist())
+        self.x0 = np.array(msg.x0.tolist())
+        self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
 
         self.start_mpc = True
     
     def timer_callback(self):
-        q_current, v_current = self.wrapper.simulator.get_state()
+        q_current, v_current = self.wrapper.device.measureState()
         
         if not(self.start_mpc):
             self.current_torque = self.u0 - self.Kp @ (q_current[7:] - self.x0[7:self.nq]) - self.Kd @ v_current[6:]
         else:
-            if self.parameter.value == "fulldynamics":
-                x_measured = np.concatenate((q_current, v_current))
-                self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
-            elif self.parameter.value == "kinodynamics":
-                self.handler.updateState(q_current, v_current, True)
-                self.WB_solver.solve_qp(
-                    self.handler.getData(),
-                    self.contact_states,
-                    v_current,
-                    self.a0,
-                    self.forces,
-                    self.handler.getMassMatrix(),
-                )
-                self.current_torque = self.WB_solver.solved_torque
+            x_measured = np.concatenate((q_current, v_current))
+            self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
         self.torque_simu[6:] = self.current_torque
-        self.wrapper.simulator.execute(self.torque_simu)
+        self.wrapper.device.execute(self.current_torque)
 
         self.set_messages(q_current, v_current)
         self.joint_pub.publish(self.measure)

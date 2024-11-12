@@ -54,6 +54,8 @@ install(PROGRAMS
   scripts/publisher_talos.py
   scripts/publisher_go2.py
   scripts/subscriber_talos.py
+  scripts/subscriber_bullet.py
+  scripts/bullet_robot.py
   scripts/subscriber_go2.py
   scripts/subscriber_test.py
   scripts/mpc.py

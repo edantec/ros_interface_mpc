@@ -90,23 +90,23 @@ class MpcPublisher(Node):
 
     def timer_callback(self):
         self.timeToWalk +=1
-        if (self.timeToWalk == 100):
+        if (self.timeToWalk == 300):
             v = np.zeros(6)
-            v[5] = 0.3
+            v[0] = 0.2
             self.mpc_block.mpc.switchToWalk(v)
         
         if (self.timeToWalk == 1000):
             self.mpc_block.mpc.switchToStand()
         
-        """ if (self.timeToWalk == 600):
+        if (self.timeToWalk == 1500):
             v = np.zeros(6)
-            v[5] = 0.4
+            v[1] = 0.2
             self.mpc_block.mpc.switchToWalk(v)
         
-        if (self.timeToWalk == 1000):
+        if (self.timeToWalk == 2000):
             self.mpc_block.mpc.switchToStand()
         
-        if (self.timeToWalk == 1100):
+        """if (self.timeToWalk == 1100):
             v = np.zeros(6)
             v[0] = -0.3
             self.mpc_block.mpc.switchToWalk(v)
