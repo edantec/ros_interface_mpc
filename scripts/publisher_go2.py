@@ -17,7 +17,7 @@
 import rclpy
 from rclpy.node import Node
 
-from ros_interface_mpc.msg import Torque, RobotState
+from ros_interface_mpc.msg import Torque, RobotState, InputMessage
 from rclpy.qos import QoSProfile
 
 import numpy as np
@@ -55,6 +55,10 @@ class MpcPublisher(Node):
         self.base_pos = np.zeros(7)
         self.base_vel = np.zeros(6)
 
+        self.switch = False
+        self.commanded_vel = np.zeros(6)
+        self.walking = False
+
         self.controlled_joint_ids = [0, 1, 2,
                                      3, 4, 5,
                                      6, 7, 8,
@@ -67,6 +71,13 @@ class MpcPublisher(Node):
             self.listener_callback,
             1)
         self.subscription  # prevent unused variable warning
+
+        self.subinput = self.create_subscription(
+            InputMessage,
+            'input',
+            self.listener_callback_input,
+            1)
+        self.subinput  # prevent unused variable warning
 
     def listener_callback(self, msg):
         self.position = np.array([msg.position[i] for i in self.controlled_joint_ids])
@@ -87,23 +98,20 @@ class MpcPublisher(Node):
         self.base_vel[5] = msg.twist.angular.z
         self.x0 = np.concatenate((self.base_pos, self.position, self.base_vel, self.velocity))
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
-
+    
+    def listener_callback_input(self, msg):
+        
+        self.commanded_vel[0] = msg.linear_vel[0]
+        self.commanded_vel[1] = msg.linear_vel[1]
+        self.commanded_vel[5] = msg.yaw_vel
+        self.walking = msg.event
+        
     def timer_callback(self):
         self.timeToWalk +=1
-        if (self.timeToWalk == 300):
-            v = np.zeros(6)
-            v[0] = 0.2
-            self.mpc_block.mpc.switchToWalk(v)
-        
-        if (self.timeToWalk == 1000):
-            self.mpc_block.mpc.switchToStand()
-        
-        if (self.timeToWalk == 1500):
-            v = np.zeros(6)
-            v[1] = 0.2
-            self.mpc_block.mpc.switchToWalk(v)
-        
-        if (self.timeToWalk == 2000):
+        if (self.walking):
+            self.get_logger().info('switch to walk')
+            self.mpc_block.mpc.switchToWalk(self.commanded_vel)
+        else:
             self.mpc_block.mpc.switchToStand()
         
         """if (self.timeToWalk == 1100):

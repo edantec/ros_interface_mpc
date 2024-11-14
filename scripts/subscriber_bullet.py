@@ -79,8 +79,6 @@ class MpcSubscriber(Node):
     def __init__(self):
         # Initialization of node
         super().__init__('mpc_subscriber')
-        self.declare_parameter('mpc_type')
-        self.parameter = self.get_parameter('mpc_type')
         self.start_mpc = False
         
         # Define state publisher
@@ -167,35 +165,9 @@ class MpcSubscriber(Node):
         gain = 100
         self.Kp = np.identity(self.nu) * gain
         self.Kd = np.identity(self.nu) * 1
-
-        # Build whole-body control layer depending on the
-        # type of MPC in use
-        self.WB_solver = None
-
-        if self.parameter.value == "kinodynamics":
-            self.handler = loadHandlerGo2()
-            
-            contact_ids = self.handler.getFeetIds()
-            id_conf = dict(
-                contact_ids=contact_ids,
-                x0=self.handler.getState(),
-                mu=0.8,
-                Lfoot=0.01,
-                Wfoot=0.01,
-                force_size=3,
-                kd=0,
-                w_force=100,
-                w_acc=1,
-                verbose=False,
-            )
-
-            self.WB_solver = IDSolver()
-            self.WB_solver.initialize(id_conf, self.handler.getModel())
             
 
     def listener_callback(self, msg):
-        #self.get_logger().info('I heard: "%s"' % msg.x0[0])
-        
         self.u0 = np.array(msg.u0.tolist())
         self.x0 = np.array(msg.x0.tolist())
         self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
@@ -210,9 +182,9 @@ class MpcSubscriber(Node):
         else:
             x_measured = np.concatenate((q_current, v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
-        self.torque_simu[6:] = self.current_torque
-        self.wrapper.device.execute(self.current_torque)
 
+        self.wrapper.device.execute(self.current_torque)
+        
         self.set_messages(q_current, v_current)
         self.joint_pub.publish(self.measure)
         self.robot_pub.publish(self.robot_state)

@@ -33,6 +33,7 @@ set(msg_files
   "msg/State.msg"
   "msg/Torque.msg"
   "msg/RobotState.msg"
+  "msg/InputMessage.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -59,6 +60,7 @@ install(PROGRAMS
   scripts/subscriber_go2.py
   scripts/subscriber_test.py
   scripts/mpc.py
+  scripts/input.py
   scripts/robot_utils.py
   scripts/simulation_args.py
   scripts/simulation_utils.py

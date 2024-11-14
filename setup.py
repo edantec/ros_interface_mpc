@@ -25,6 +25,7 @@ setup(
             'talker_python = python.publisher:main',
             'listener_python = python.subscriber:main',
             'state_publisher = python.state_publisher:main'
+            'input = ros_interface_mpc.input:main'
         ],
     },
 )

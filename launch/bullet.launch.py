@@ -12,16 +12,11 @@ def generate_launch_description():
   # Set the path to this package.
   pkg_share = FindPackageShare(package='ros_interface_mpc').find('ros_interface_mpc')
 
-  # Set the path to the RViz configuration settings
-  default_rviz_config_path = os.path.join(pkg_share, 'rviz/rviz_basic_settings.rviz')
-
   # Set the path to the URDF file
   default_urdf_model_path = os.path.join(pkg_share, 'urdf/go2_description.urdf')
 
   # Launch configuration variables specific to simulation
-  rviz_config_file = LaunchConfiguration('rviz_config_file')
   use_robot_state_pub = LaunchConfiguration('use_robot_state_pub')
-  use_rviz = LaunchConfiguration('use_rviz')
   use_sim_time = LaunchConfiguration('use_sim_time')
   mpc_type = LaunchConfiguration('mpc_type')
   motion_type = LaunchConfiguration('motion_type')
@@ -36,21 +31,12 @@ def generate_launch_description():
     name='urdf_model', 
     default_value=default_urdf_model_path, 
     description='Absolute path to robot urdf file')
-    
-  declare_rviz_config_file_cmd = DeclareLaunchArgument(
-    name='rviz_config_file',
-    default_value=default_rviz_config_path,
-    description='Full path to the RVIZ config file to use')
+
   
   declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
     name='use_robot_state_pub',
     default_value='True',
     description='Whether to start the robot state publisher')
-
-  declare_use_rviz_cmd = DeclareLaunchArgument(
-    name='use_rviz',
-    default_value='True',
-    description='Whether to start RVIZ')
     
   declare_use_sim_time_cmd = DeclareLaunchArgument(
     name='use_sim_time',
@@ -92,15 +78,13 @@ def generate_launch_description():
     name='publisher',
     output='screen',
     parameters=[{"mpc_type": mpc_type, "motion_type" : motion_type}])
+  
 
-  # Launch RViz
-  start_rviz_cmd = Node(
-    condition=IfCondition(use_rviz),
-    package='rviz2',
-    executable='rviz2',
-    name='rviz2',
-    output='screen',
-    arguments=['-d', rviz_config_file])
+  start_input_publisher = Node(
+    package='ros_interface_mpc',
+    executable='input.py',
+    name='input',
+    output='screen')
   
   # Create the launch description and populate
   ld = LaunchDescription()
@@ -108,9 +92,7 @@ def generate_launch_description():
   # Declare the launch options
   ld.add_action(declare_robot_name_cmd)
   ld.add_action(declare_urdf_model_path_cmd)
-  ld.add_action(declare_rviz_config_file_cmd)
   ld.add_action(declare_use_robot_state_pub_cmd)  
-  ld.add_action(declare_use_rviz_cmd) 
   ld.add_action(declare_use_sim_time_cmd)
   ld.add_action(declare_mpc_type)
   ld.add_action(declare_motion_type)
@@ -119,6 +101,6 @@ def generate_launch_description():
   ld.add_action(start_control_node)
   ld.add_action(start_state_publisher)
   ld.add_action(start_robot_state_publisher_cmd)
-  #ld.add_action(start_rviz_cmd)
+  ld.add_action(start_input_publisher)
 
   return ld
