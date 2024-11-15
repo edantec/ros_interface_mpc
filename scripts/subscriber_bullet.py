@@ -72,10 +72,22 @@ class MpcSubscriber(Node):
         self.space = manifolds.MultibodyPhaseSpace(self.rmodel)
 
         self.q_current = np.array([0., 0., 0.335, 0., 0., 0., 1.,
+            0.0899, 0.8130, -1.596, 
+            -0.0405, 0.824, -1.595, 
+            0.1695, 0.824, -1.606, 
+            -0.1354, 0.820, -1.593
+        ])
+        """ self.default_standing = np.array([
             0.068, 0.785, -1.440,
             -0.068, 0.785, -1.440,
             0.068, 0.785, -1.440,
             -0.068, 0.785, -1.440,
+        ]) """
+        self.default_standing = np.array([
+            0.0899, 0.8130, -1.596, 
+            -0.0405, 0.824, -1.595, 
+            0.1695, 0.824, -1.606, 
+            -0.1354, 0.820, -1.593
         ])
         self.v_current = np.zeros(18)
 
@@ -91,8 +103,8 @@ class MpcSubscriber(Node):
 
         # Define default PD controller that runs before MPC launch
         gain = 100
-        self.Kp = np.ones(12) * gain
-        self.Kd = np.ones(12) * 1
+        self.Kp = np.ones(12) * 0
+        self.Kd = np.ones(12) * 0
 
 
     def listener_callback(self, msg):
@@ -127,17 +139,19 @@ class MpcSubscriber(Node):
         self.v_current[6:] = current_tqva[2]
 
         if not(self.start_mpc):
-            self.current_torque = self.u0 - self.Kp @ (self.q_current[7:] - self.x0[7:self.nq]) - self.Kd @ self.v_current[6:]
+            #self.get_logger().info('Default control')
+            self.current_torque = self.u0 - self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         else:
             x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
 
         if (self.robotIf.is_init):
-            self.robotIf.send_command(self.q_current[7:].tolist(),
-                                    self.v_current[6:].tolist(),
+            self.robotIf.send_command(self.x0[7:self.nq].tolist(),
+                                    self.x0[self.nq + 6:].tolist(),
                                     self.current_torque.tolist(),
-                                    self.Kp.tolist(),
-                                    self.Kd.tolist())
+                                    [150.]*12, #self.Kp.tolist(),
+                                    [10.]*12 #self.Kd.tolist()
+            )
 
             state = State()
             state.qc = self.q_current.tolist()
@@ -151,8 +165,7 @@ def main(args=None):
 
     thread = threading.Thread(target=rclpy.spin, args=(mpc_subscriber, ), daemon=True)
     thread.start()
-
-    mpc_subscriber.robotIf.start(mpc_subscriber.q_current[7:].tolist())
+    mpc_subscriber.robotIf.start(mpc_subscriber.default_standing.tolist())
     input("Ready to start...")
 
     thread.join()

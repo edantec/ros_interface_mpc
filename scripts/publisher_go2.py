@@ -73,9 +73,7 @@ class MpcPublisher(Node):
         self.subinput  # prevent unused variable warning
 
     def listener_callback(self, msg):
-        qc = np.array([msg.qc[i] for i in 12])
-        vc = np.array([msg.vc[i] for i in 12])
-        self.x0 = np.concatenate((qc, vc))
+        self.x0 = np.array(msg.qc + msg.vc)
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
     
     def listener_callback_input(self, msg):
