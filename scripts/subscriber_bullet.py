@@ -64,7 +64,11 @@ class MpcSubscriber(Node):
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
-        self.current_torque = np.zeros(12)
+        self.current_torque = np.array([-3.71, -1.81,  5.25,
+            3.14, -1.37, 5.54,
+            -1.39, -1.09,  3.36,
+            1.95, -0.61,  3.61
+        ])
 
         # Load the robot model
         self.rmodel, geom_model = loadGo2()
@@ -103,8 +107,8 @@ class MpcSubscriber(Node):
 
         # Define default PD controller that runs before MPC launch
         gain = 100
-        self.Kp = np.ones(12) * 0
-        self.Kd = np.ones(12) * 0
+        self.Kp = [150.]*12
+        self.Kd = [10.]*12
 
 
     def listener_callback(self, msg):
@@ -138,10 +142,12 @@ class MpcSubscriber(Node):
         self.q_current[7:] = current_tqva[1]
         self.v_current[6:] = current_tqva[2]
 
-        if not(self.start_mpc):
+        #if not(self.start_mpc):
             #self.get_logger().info('Default control')
-            self.current_torque = self.u0 - self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
-        else:
+            #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
+        if self.start_mpc:
+            self.Kp = [0.]*12
+            self.Kd = [0.]*12
             x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
 
@@ -149,8 +155,8 @@ class MpcSubscriber(Node):
             self.robotIf.send_command(self.x0[7:self.nq].tolist(),
                                     self.x0[self.nq + 6:].tolist(),
                                     self.current_torque.tolist(),
-                                    [150.]*12, #self.Kp.tolist(),
-                                    [10.]*12 #self.Kd.tolist()
+                                    self.Kp, #self.Kp.tolist(),
+                                    self.Kd #self.Kd.tolist()
             )
 
             state = State()
