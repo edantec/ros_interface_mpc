@@ -17,7 +17,8 @@
 import rclpy
 from rclpy.node import Node
 
-from ros_interface_mpc.msg import Torque, State, InputMessage
+from ros_interface_mpc.msg import Torque, State
+from sensor_msgs.msg import Joy
 from rclpy.qos import QoSProfile
 
 import numpy as np
@@ -66,7 +67,7 @@ class MpcPublisher(Node):
         self.subscription  # prevent unused variable warning
 
         self.subinput = self.create_subscription(
-            InputMessage,
+            Joy,
             'input',
             self.listener_callback_input,
             1)
@@ -77,12 +78,14 @@ class MpcPublisher(Node):
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
     
     def listener_callback_input(self, msg):
-        
-        self.commanded_vel[0] = msg.linear_vel[0]
-        self.commanded_vel[1] = msg.linear_vel[1]
-        self.commanded_vel[5] = msg.yaw_vel
-        self.walking = msg.event
-        
+        self.commanded_vel[0] = msg.axes[1] * 0.25 #m/s
+        self.commanded_vel[1] = msg.axes[0] * 0.25 #m/s
+        self.commanded_vel[5] = msg.axes[2] * 0.15
+        if msg.buttons[1]:
+            self.walking = True
+        if msg.buttons[2]:
+            self.walking = False
+
     def timer_callback(self):
         self.timeToWalk +=1
         if (self.walking):
