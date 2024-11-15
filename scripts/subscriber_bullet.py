@@ -79,6 +79,9 @@ class MpcSubscriber(Node):
         ])
         self.v_current = np.zeros(18)
 
+        self.ndx = 36
+        self.nu = 12
+        self.nq = 19
         self.x0 = np.concatenate((self.q_current, self.v_current))
         self.u0 = np.array([-3.71, -1.81,  5.25,  
                             3.14, -1.37, 5.54, 
@@ -103,10 +106,10 @@ class MpcSubscriber(Node):
         self.q_current[0] = msg.pose.pose.position.x
         self.q_current[1] = msg.pose.pose.position.y
         self.q_current[2] = msg.pose.pose.position.z
-        self.q_current[3] = msg.pose.pose.quaternion.x
-        self.q_current[4] = msg.pose.pose.quaternion.y
-        self.q_current[5] = msg.pose.pose.quaternion.z
-        self.q_current[6] = msg.pose.pose.quaternion.w
+        self.q_current[3] = msg.pose.pose.orientation.x
+        self.q_current[4] = msg.pose.pose.orientation.y
+        self.q_current[5] = msg.pose.pose.orientation.z
+        self.q_current[6] = msg.pose.pose.orientation.w
 
         self.v_current[0] = msg.twist.twist.linear.x
         self.v_current[1] = msg.twist.twist.linear.y
