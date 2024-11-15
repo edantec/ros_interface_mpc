@@ -22,13 +22,13 @@ import pinocchio as pin
 from ros_interface_mpc.msg import Torque, State
 from rclpy.qos import QoSProfile
 
-from bullet_robot import BulletRobot
 from nav_msgs.msg import Odometry
 
 from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
 import example_robot_data
+import threading
 
 class MpcSubscriber(Node):
 
@@ -79,9 +79,6 @@ class MpcSubscriber(Node):
         ])
         self.v_current = np.zeros(18)
 
-        self.robotIf.start(self.q_current[7:].tolist())
-        input("Ready to start...")
-
         self.x0 = np.concatenate((self.q_current, self.v_current))
         self.u0 = np.array([-3.71, -1.81,  5.25,  
                             3.14, -1.37, 5.54, 
@@ -127,24 +124,31 @@ class MpcSubscriber(Node):
         else:
             x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
-
-        self.robotIf.send_command(self.q_current[7:].tolist(), 
-                                  self.v_current[6:].tolist(), 
-                                  self.current_torque.tolist(), 
-                                  self.Kp.tolist(), 
-                                  self.Kd.tolist())
         
-        state = State()
-        state.qc = self.q_current
-        state.vc = self.v_current
-        self.robot_pub.publish(state)
+        if (self.robotIf.is_init):
+            self.robotIf.send_command(self.q_current[7:].tolist(), 
+                                    self.v_current[6:].tolist(), 
+                                    self.current_torque.tolist(), 
+                                    self.Kp.tolist(), 
+                                    self.Kd.tolist())
+        
+            state = State()
+            state.qc = self.q_current
+            state.vc = self.v_current
+            self.robot_pub.publish(state)
 
 def main(args=None):
     rclpy.init(args=args)
 
     mpc_subscriber = MpcSubscriber()
 
-    rclpy.spin(mpc_subscriber)
+    thread = threading.Thread(target=rclpy.spin, args=(mpc_subscriber, ), daemon=True)
+    thread.start()
+    
+    mpc_subscriber.robotIf.start(mpc_subscriber.q_current[7:].tolist())
+    input("Ready to start...")
+
+    thread.join()
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
