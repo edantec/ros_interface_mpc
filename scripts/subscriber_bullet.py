@@ -71,7 +71,7 @@ class MpcSubscriber(Node):
 
         self.space = manifolds.MultibodyPhaseSpace(self.rmodel)
 
-        self.q_current = np.array([0, 0, 0.335, 0, 0, 0, 1,
+        self.q_current = np.array([0., 0., 0.335, 0., 0., 0., 1.,
             0.068, 0.785, -1.440,
             -0.068, 0.785, -1.440,
             0.068, 0.785, -1.440,
@@ -140,8 +140,8 @@ class MpcSubscriber(Node):
                                     self.Kd.tolist())
 
             state = State()
-            state.qc = self.q_current
-            state.vc = self.v_current
+            state.qc = self.q_current.tolist()
+            state.vc = self.v_current.tolist()
             self.robot_pub.publish(state)
 
 def main(args=None):
