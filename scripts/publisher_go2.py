@@ -17,11 +17,10 @@
 import rclpy
 from rclpy.node import Node
 
-from ros_interface_mpc.msg import Torque, RobotState, InputMessage
+from ros_interface_mpc.msg import Torque, State, InputMessage
 from rclpy.qos import QoSProfile
 
 import numpy as np
-import pinocchio as pin
 
 from mpc import ControlBlockGo2
 
@@ -59,14 +58,8 @@ class MpcPublisher(Node):
         self.commanded_vel = np.zeros(6)
         self.walking = False
 
-        self.controlled_joint_ids = [0, 1, 2,
-                                     3, 4, 5,
-                                     6, 7, 8,
-                                     9, 10, 11
-        ]
-
         self.subscription = self.create_subscription(
-            RobotState,
+            State,
             'robot_states',
             self.listener_callback,
             1)
@@ -80,23 +73,9 @@ class MpcPublisher(Node):
         self.subinput  # prevent unused variable warning
 
     def listener_callback(self, msg):
-        self.position = np.array([msg.position[i] for i in self.controlled_joint_ids])
-        self.velocity = np.array([msg.velocity[i] for i in self.controlled_joint_ids])
-        self.base_pos[0] = msg.transform.translation.x
-        self.base_pos[1] = msg.transform.translation.y
-        self.base_pos[2] = msg.transform.translation.z
-        self.base_pos[3] = msg.transform.rotation.x
-        self.base_pos[4] = msg.transform.rotation.y
-        self.base_pos[5] = msg.transform.rotation.z
-        self.base_pos[6] = msg.transform.rotation.w
-
-        self.base_vel[0] = msg.twist.linear.x
-        self.base_vel[1] = msg.twist.linear.y
-        self.base_vel[2] = msg.twist.linear.z
-        self.base_vel[3] = msg.twist.angular.x
-        self.base_vel[4] = msg.twist.angular.y
-        self.base_vel[5] = msg.twist.angular.z
-        self.x0 = np.concatenate((self.base_pos, self.position, self.base_vel, self.velocity))
+        qc = np.array([msg.qc[i] for i in 12])
+        vc = np.array([msg.vc[i] for i in 12])
+        self.x0 = np.concatenate((qc, vc))
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
     
     def listener_callback_input(self, msg):

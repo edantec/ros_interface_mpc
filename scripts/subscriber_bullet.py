@@ -19,73 +19,28 @@ from rclpy.node import Node
 import numpy as np
 
 import pinocchio as pin
-from ros_interface_mpc.msg import Torque, RobotState
-from sensor_msgs.msg import JointState
-from tf2_ros import TransformBroadcaster, TransformStamped
-from geometry_msgs.msg import Quaternion
+from ros_interface_mpc.msg import Torque, State
 from rclpy.qos import QoSProfile
-from simple_mpc import IDSolver
 
 from bullet_robot import BulletRobot
+from nav_msgs.msg import Odometry
 
-from robot_utils import loadGo2, loadHandlerGo2
+from robot_utils import loadGo2
+from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
 import example_robot_data
-
-class SimulationWrapper():
-
-    def __init__(self):
-        URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
-        modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
-        controlled_joints_names=[
-            "root_joint",
-            "FL_hip_joint",
-            "FL_thigh_joint",
-            "FL_calf_joint",
-            "FR_hip_joint",
-            "FR_thigh_joint",
-            "FR_calf_joint",
-            "RL_hip_joint",
-            "RL_thigh_joint",
-            "RL_calf_joint",
-            "RR_hip_joint",
-            "RR_thigh_joint",
-            "RR_calf_joint",
-        ]
-        # Load the robot model 
-        self.rmodel, geom_model = loadGo2()
-        """ Initialize simulation"""
-        q0 = np.array([0, 0, 0.335, 0, 0, 0, 1,
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-        ])
-        self.device = BulletRobot(
-            controlled_joints_names,
-            modelPath,
-            URDF_SUBPATH,
-            1e-3,
-            self.rmodel,
-            q0[:3],
-        )
-        self.device.initializeJoints(q0)
-        self.device.changeCamera(1.0, 60, -15, [0.6, -0.2, 0.5])
-
-
 
 class MpcSubscriber(Node):
 
     def __init__(self):
         # Initialization of node
         super().__init__('mpc_subscriber')
+        self.robotIf = Go2RobotInterface(self)
         self.start_mpc = False
         
         # Define state publisher
         qos_profile = QoSProfile(depth=10)
-        self.joint_pub = self.create_publisher(JointState, 'joint_states', qos_profile)
-        self.robot_pub = self.create_publisher(RobotState, 'robot_states', 10)
-        self.broadcaster = TransformBroadcaster(self, qos=qos_profile)
+        self.robot_pub = self.create_publisher(State, 'robot_states', qos_profile)
         
         # Define command subscriber
         self.subscription = self.create_subscription(
@@ -95,76 +50,49 @@ class MpcSubscriber(Node):
             qos_profile)
         self.subscription  # prevent unused variable warning
 
+        # Define odometry subscriber
+        self.subscription_odom = self.create_subscription(
+            Odometry,
+            'odometry/filtered',
+            self.listener_callback_odom,
+            1)
+        self.subscription_odom  # prevent unused variable warning
+
         # Define at which rate the simulation state is sent to rviz
         timer_period = 0.001  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
-
-        # Message declarations for odometry
-        self.odom_trans = TransformStamped()
-        self.odom_trans.header.frame_id = 'world'
-        self.odom_trans.child_frame_id = 'base'
-        self.robot_state = RobotState()
         
         # Message declarations for torque
-        self.wrapper = SimulationWrapper()
-        self.ndx = self.wrapper.rmodel.nv * 2
-        self.nq = self.wrapper.rmodel.nq
-        self.nu = self.wrapper.rmodel.nv - 6
-        self.torque_simu = np.zeros(self.wrapper.rmodel.nv)
-        self.current_torque = np.zeros(self.wrapper.rmodel.nv - 6)
-        self.space = manifolds.MultibodyPhaseSpace(self.wrapper.rmodel)
+        self.torque_simu = np.zeros(18)
+        self.current_torque = np.zeros(12)
 
-        # Message declaration for joint states
-        self.measure = JointState()
-        self.measure.name = ["FL_hip_joint",
-            "FL_thigh_joint",
-            "FL_calf_joint",
-            "FR_hip_joint",
-            "FR_thigh_joint",
-            "FR_calf_joint",
-            "RL_hip_joint",
-            "RL_thigh_joint",
-            "RL_calf_joint",
-            "RR_hip_joint",
-            "RR_thigh_joint",
-            "RR_calf_joint"
-        ]
-        self.measure.position = [0., 0., 0., # FL
-                                 0., 0., 0., # FR
-                                 0., 0., 0., # HL
-                                 0., 0., 0., # HR
-        ]
-        self.robot_state.position = self.measure.position
-        self.measure.velocity = [0., 0., 0., # FL
-                                 0., 0., 0., # FR
-                                 0., 0., 0., # HL
-                                 0., 0., 0., # HR
-        ]
-        self.robot_state.velocity = self.measure.velocity
-        self.controlled_joint_ids = [0, 1, 2,
-                                     3, 4, 5,
-                                     6, 7, 8,
-                                     9, 10, 11, 
-        ]
+        # Load the robot model 
+        self.rmodel, geom_model = loadGo2()
+
+        self.space = manifolds.MultibodyPhaseSpace(self.rmodel)
         
-        # Initial state of the robot with feedforward torque equal to
-        # gravity-compensating torque in half-sitting
-        q_current, v_current = self.wrapper.device.measureState()
-    
-        self.x0 = np.concatenate((q_current, v_current))
+        self.q_current = np.array([0, 0, 0.335, 0, 0, 0, 1,
+            0.068, 0.785, -1.440,
+            -0.068, 0.785, -1.440,
+            0.068, 0.785, -1.440,
+            -0.068, 0.785, -1.440,
+        ])
+        self.v_current = np.zeros(18)
+
+        self.robotIf.start(self.q_current[7:].tolist())
+        input("Ready to start...")
+
+        self.x0 = np.concatenate((self.q_current, self.v_current))
         self.u0 = np.array([-3.71, -1.81,  5.25,  
                             3.14, -1.37, 5.54, 
                             -1.39, -1.09,  3.36,  
                             1.95, -0.61,  3.61])
-        self.K0 = np.zeros((self.nu, self.ndx))
-
-        # Set state message using latest simulation measure
-        self.set_messages(q_current, v_current)
+        self.K0 = np.zeros((12, 36))
         
         # Define default PD controller that runs before MPC launch
         gain = 100
-        self.Kp = np.identity(self.nu) * gain
-        self.Kd = np.identity(self.nu) * 1
+        self.Kp = np.ones(12) * gain
+        self.Kd = np.ones(12) * 1
             
 
     def listener_callback(self, msg):
@@ -174,52 +102,42 @@ class MpcSubscriber(Node):
 
         self.start_mpc = True
     
+    def listener_callback_odom(self, msg):
+        self.q_current[0] = msg.pose.pose.position.x
+        self.q_current[1] = msg.pose.pose.position.y
+        self.q_current[2] = msg.pose.pose.position.z
+        self.q_current[3] = msg.pose.pose.quaternion.x
+        self.q_current[4] = msg.pose.pose.quaternion.y
+        self.q_current[5] = msg.pose.pose.quaternion.z
+        self.q_current[6] = msg.pose.pose.quaternion.w
+
+        self.v_current[0] = msg.twist.twist.linear.x
+        self.v_current[1] = msg.twist.twist.linear.y
+        self.v_current[2] = msg.twist.twist.linear.z
+        self.v_current[3] = msg.twist.twist.angular.x
+        self.v_current[4] = msg.twist.twist.angular.y
+        self.v_current[5] = msg.twist.twist.angular.z
+    
     def timer_callback(self):
-        q_current, v_current = self.wrapper.device.measureState()
+        self.q_current[7:] = self.robotIf.get_joint_state()[1]
+        self.v_current[6:] = self.robotIf.get_joint_state()[2]
         
         if not(self.start_mpc):
-            self.current_torque = self.u0 - self.Kp @ (q_current[7:] - self.x0[7:self.nq]) - self.Kd @ v_current[6:]
+            self.current_torque = self.u0 - self.Kp @ (self.q_current[7:] - self.x0[7:self.nq]) - self.Kd @ self.v_current[6:]
         else:
-            x_measured = np.concatenate((q_current, v_current))
+            x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
 
-        self.wrapper.device.execute(self.current_torque)
+        self.robotIf.send_command(self.q_current[7:].tolist(), 
+                                  self.v_current[6:].tolist(), 
+                                  self.current_torque.tolist(), 
+                                  self.Kp.tolist(), 
+                                  self.Kd.tolist())
         
-        self.set_messages(q_current, v_current)
-        self.joint_pub.publish(self.measure)
-        self.robot_pub.publish(self.robot_state)
-        self.broadcaster.sendTransform(self.odom_trans)
-        #self.get_logger().info('Publishing: "%s"' % q_current)
-    
-    def set_messages(self, q_current, v_current):
-        self.measure.header.stamp = self.get_clock().now().to_msg()
-        for meas_id, joint_id in enumerate(self.controlled_joint_ids):
-            self.measure.position[joint_id] = q_current[7 + meas_id]
-            self.measure.velocity[joint_id] = v_current[6 + meas_id]
-            self.robot_state.position[joint_id] = q_current[7 + meas_id]
-            self.robot_state.velocity[joint_id] = v_current[6 + meas_id]
-
-        self.odom_trans.header.stamp = self.get_clock().now().to_msg()
-        self.odom_trans.transform.translation.x = q_current[0]
-        self.odom_trans.transform.translation.y = q_current[1]
-        self.odom_trans.transform.translation.z = q_current[2]
-        self.odom_trans.transform.rotation = Quaternion(x=q_current[3], 
-                                                        y=q_current[4], 
-                                                        z=q_current[5], 
-                                                        w=q_current[6])
-        self.robot_state.transform.translation.x = q_current[0]
-        self.robot_state.transform.translation.y = q_current[1]
-        self.robot_state.transform.translation.z = q_current[2]
-        self.robot_state.transform.rotation = Quaternion(x=q_current[3], 
-                                                         y=q_current[4], 
-                                                         z=q_current[5], 
-                                                         w=q_current[6])
-        self.robot_state.twist.linear.x = v_current[0]
-        self.robot_state.twist.linear.y = v_current[1]
-        self.robot_state.twist.linear.z = v_current[2]
-        self.robot_state.twist.angular.x = v_current[3]
-        self.robot_state.twist.angular.y = v_current[4]
-        self.robot_state.twist.angular.z = v_current[5]
+        state = State()
+        state.qc = self.q_current
+        state.vc = self.v_current
+        self.robot_pub.publish(state)
 
 def main(args=None):
     rclpy.init(args=args)

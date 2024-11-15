@@ -1,2 +1,2 @@
-int64 nx
-float64[] x
+float64[] qc
+float64[] vc
