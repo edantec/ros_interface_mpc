@@ -119,8 +119,12 @@ class MpcSubscriber(Node):
         self.v_current[5] = msg.twist.twist.angular.z
     
     def timer_callback(self):
-        self.q_current[7:] = self.robotIf.get_joint_state()[1]
-        self.v_current[6:] = self.robotIf.get_joint_state()[2]
+        current_tqva = self.robotIf.get_joint_state()
+        if current_tqva is None:
+            return # No state received yet
+
+        self.q_current[7:] = current_tqva[1]
+        self.v_current[6:] = current_tqva[2]
         
         if not(self.start_mpc):
             self.current_torque = self.u0 - self.Kp @ (self.q_current[7:] - self.x0[7:self.nq]) - self.Kd @ self.v_current[6:]
