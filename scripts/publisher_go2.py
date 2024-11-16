@@ -43,7 +43,6 @@ class MpcPublisher(Node):
         self.mpc_block = ControlBlockGo2(self.parameter.value, self.motion.value)
         self.mpc_block.create_gait()
         self.mpc_block.mpc.switchToStand()
-        self.timeToWalk = 0
         
         self.force_dim = 12
         self.ndx = self.mpc_block.param.handler.getModel().nv * 2
@@ -55,7 +54,6 @@ class MpcPublisher(Node):
         self.base_pos = np.zeros(7)
         self.base_vel = np.zeros(6)
 
-        self.switch = False
         self.commanded_vel = np.zeros(6)
         self.walking = False
 
@@ -81,26 +79,19 @@ class MpcPublisher(Node):
         self.commanded_vel[0] = msg.axes[1] * 0.25 #m/s
         self.commanded_vel[1] = msg.axes[0] * 0.25 #m/s
         self.commanded_vel[5] = msg.axes[2] * 0.15
-        if msg.buttons[1]:
+
+        if msg.buttons[1]: # Toggle only at first press
+            self.get_logger().info('Walk mode')
             self.walking = True
-        if msg.buttons[2]:
+        if msg.buttons[2]: # Toggle only at first press
+            self.get_logger().info('Stand mode')
             self.walking = False
 
     def timer_callback(self):
-        self.timeToWalk +=1
-        if (self.walking):
-            self.get_logger().info('switch to walk')
+        if self.walking:
             self.mpc_block.mpc.switchToWalk(self.commanded_vel)
         else:
             self.mpc_block.mpc.switchToStand()
-        
-        """if (self.timeToWalk == 1100):
-            v = np.zeros(6)
-            v[0] = -0.3
-            self.mpc_block.mpc.switchToWalk(v)
-        
-        if (self.timeToWalk == 1500):
-            self.mpc_block.mpc.switchToStand() """
 
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
