@@ -320,7 +320,7 @@ class ControlBlockGo2():
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
-        self.T = 50
+        self.T = 30
         
         if mpc_type == "fulldynamics":
             problem = FullDynamicsProblem(self.param.handler)

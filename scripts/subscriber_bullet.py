@@ -109,7 +109,7 @@ class MpcSubscriber(Node):
         self.Kp = [150.]*12
         self.Kd = [10.]*12
 
-        self.LastCommandTimeStamp = self.get_clock().now()
+        self.LastCommandTimeStamp = self.get_clock().now().nanoseconds * 1e-9
         self.jointCommand = np.array([
             0.0899, 0.8130, -1.596, 
             -0.0405, 0.824, -1.595, 
@@ -117,6 +117,7 @@ class MpcSubscriber(Node):
             -0.1354, 0.820, -1.593
         ])
         self.velocityCommand = np.zeros(12)
+        self.MPC_timestep = 0.01
 
 
     def listener_callback(self, msg):
@@ -148,7 +149,7 @@ class MpcSubscriber(Node):
         self.v_current[5] = msg.twist.twist.angular.z
     
     def interpolate(self, v1, v2, delay):
-        return  v1 * (0.01 - delay) / 0.01 + v2 * (delay / 0.01)
+        return  v1 * (self.MPC_timestep - delay) / self.MPC_timestep + v2 * (delay / self.MPC_timestep)
     
     def timer_callback(self):
         current_tqva = self.robotIf.get_joint_state()
@@ -161,18 +162,19 @@ class MpcSubscriber(Node):
         currentTime = self.get_clock().now().nanoseconds * 1e-9
         
         delay = currentTime - self.LastCommandTimeStamp
+        #self.get_logger().info('Delay : "%s"' % delay)
         #if not(self.start_mpc):
             #self.get_logger().info('Default control')
             #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         if self.start_mpc:
             #self.Kp = [0.]*12
             #self.Kd = [0.]*12
-            if delay < 0.01:
+            if delay < self.MPC_timestep:
                 self.jointCommand = self.interpolate(self.x0[7:self.nq], self.x1[7:self.nq], delay)
                 self.velocityCommand = self.interpolate(self.x0[self.nq + 6:], self.x1[self.nq + 6:], delay)
-            elif delay < 0.02:
-                self.jointCommand = self.interpolate(self.x1[7:self.nq], self.x2[7:self.nq], delay - 0.01)
-                self.velocityCommand = self.interpolate(self.x1[self.nq + 6:], self.x2[self.nq + 6:], delay - 0.01)
+            elif delay < 2 * self.MPC_timestep:
+                self.jointCommand = self.interpolate(self.x1[7:self.nq], self.x2[7:self.nq], delay - self.MPC_timestep)
+                self.velocityCommand = self.interpolate(self.x1[self.nq + 6:], self.x2[self.nq + 6:], delay - self.MPC_timestep)
             else:
                 self.jointCommand = self.x2[7:self.nq]
                 self.velocityCommand = self.x2[self.nq + 6:]
