@@ -95,14 +95,19 @@ class MpcPublisher(Node):
 
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
+        msg.stamp = self.get_clock().now().to_msg()
         if self.parameter.value == "fulldynamics":
-            msg.x0 = self.x0.tolist()
+            msg.x0 = self.mpc_block.mpc.xs[0].tolist()
+            msg.x1 = self.mpc_block.mpc.xs[1].tolist()
+            msg.x2 = self.mpc_block.mpc.xs[2].tolist()
             msg.u0 = self.mpc_block.mpc.us[0].tolist()
-            K0 = self.mpc_block.mpc.K0.tolist()
-            riccati = []
-            for k in K0:
-                riccati += k
-            msg.riccati = riccati
+            msg.u1 = self.mpc_block.mpc.us[1].tolist()
+            msg.u2 = self.mpc_block.mpc.us[2].tolist()
+            K0_mpc = self.mpc_block.mpc.K0.tolist()
+            K0 = []
+            for k in K0_mpc:
+                K0 += k
+            msg.k0 = K0
             msg.ndx = self.ndx
             msg.nu = self.nu
         elif self.parameter.value == "kinodynamics":

@@ -27,7 +27,6 @@ from nav_msgs.msg import Odometry
 from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
-import example_robot_data
 import threading
 
 class MpcSubscriber(Node):
@@ -110,11 +109,25 @@ class MpcSubscriber(Node):
         self.Kp = [150.]*12
         self.Kd = [10.]*12
 
+        self.LastCommandTimeStamp = self.get_clock().now()
+        self.jointCommand = np.array([
+            0.0899, 0.8130, -1.596, 
+            -0.0405, 0.824, -1.595, 
+            0.1695, 0.824, -1.606, 
+            -0.1354, 0.820, -1.593
+        ])
+        self.velocityCommand = np.zeros(12)
+
 
     def listener_callback(self, msg):
         self.u0 = np.array(msg.u0.tolist())
+        self.u1 = np.array(msg.u1.tolist())
+        self.u2 = np.array(msg.u2.tolist())
         self.x0 = np.array(msg.x0.tolist())
-        self.K0 = np.array(msg.riccati.tolist()).reshape((self.nu, self.ndx))
+        self.x1 = np.array(msg.x1.tolist())
+        self.x2 = np.array(msg.x2.tolist())
+        self.K0 = np.array(msg.k0.tolist()).reshape((self.nu, self.ndx))
+        self.LastCommandTimeStamp = self.get_clock().now().nanoseconds * 1e-9
 
         self.start_mpc = True
 
@@ -133,7 +146,10 @@ class MpcSubscriber(Node):
         self.v_current[3] = msg.twist.twist.angular.x
         self.v_current[4] = msg.twist.twist.angular.y
         self.v_current[5] = msg.twist.twist.angular.z
-
+    
+    def interpolate(self, v1, v2, delay):
+        return  v1 * (0.01 - delay) / 0.01 + v2 * (delay / 0.01)
+    
     def timer_callback(self):
         current_tqva = self.robotIf.get_joint_state()
         if current_tqva is None:
@@ -142,27 +158,41 @@ class MpcSubscriber(Node):
         self.q_current[7:] = current_tqva[1]
         self.v_current[6:] = current_tqva[2]
 
+        currentTime = self.get_clock().now().nanoseconds * 1e-9
+        
+        delay = currentTime - self.LastCommandTimeStamp
         #if not(self.start_mpc):
             #self.get_logger().info('Default control')
             #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         if self.start_mpc:
-            self.Kp = [0.]*12
-            self.Kd = [0.]*12
+            #self.Kp = [0.]*12
+            #self.Kd = [0.]*12
+            if delay < 0.01:
+                self.jointCommand = self.interpolate(self.x0[7:self.nq], self.x1[7:self.nq], delay)
+                self.velocityCommand = self.interpolate(self.x0[self.nq + 6:], self.x1[self.nq + 6:], delay)
+            elif delay < 0.02:
+                self.jointCommand = self.interpolate(self.x1[7:self.nq], self.x2[7:self.nq], delay - 0.01)
+                self.velocityCommand = self.interpolate(self.x1[self.nq + 6:], self.x2[self.nq + 6:], delay - 0.01)
+            else:
+                self.jointCommand = self.x2[7:self.nq]
+                self.velocityCommand = self.x2[self.nq + 6:]
             x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
 
         if (self.robotIf.is_init):
-            self.robotIf.send_command(self.x0[7:self.nq].tolist(),
-                                    self.x0[self.nq + 6:].tolist(),
+            self.robotIf.send_command(self.jointCommand.tolist(),
+                                    self.velocityCommand.tolist(),
                                     self.current_torque.tolist(),
                                     self.Kp, #self.Kp.tolist(),
                                     self.Kd #self.Kd.tolist()
             )
 
             state = State()
+            state.stamp = self.get_clock().now().to_msg()
             state.qc = self.q_current.tolist()
             state.vc = self.v_current.tolist()
             self.robot_pub.publish(state)
+        
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,8 +1,13 @@
+builtin_interfaces/Time stamp
 int64 ndx
 int64 nu
-float64[] riccati
+float64[] k0
 float64[] x0
+float64[] x1
+float64[] x2
 float64[] u0
+float64[] u1
+float64[] u2
 bool[] contact_states
 float64[] forces
 float64[] a0
