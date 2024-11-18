@@ -25,6 +25,7 @@ from rclpy.qos import QoSProfile
 from rclpy.time import Time
 
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float64MultiArray
 
 from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
@@ -126,6 +127,11 @@ class MpcSubscriber(Node):
         ])
         self.MPC_timestep = 0.01
 
+        # For filtering base position and velocity
+        self.base_filter_fq = self.declare_parameter("base_filter_fq", -1.0).value # By default no filter
+        self.t_pose_update = None
+        self.debug_filter_pub = self.create_publisher(Float64MultiArray, "debug_filter", 10)
+
 
     def listener_callback(self, msg):
         self.u0 = np.array(msg.u0.tolist())
@@ -140,21 +146,33 @@ class MpcSubscriber(Node):
         self.start_mpc = True
 
     def listener_callback_odom(self, msg):
-        self.q_current[0] = msg.pose.pose.position.x
-        self.q_current[1] = msg.pose.pose.position.y
-        self.q_current[2] = msg.pose.pose.position.z
-        self.q_current[3] = msg.pose.pose.orientation.x
-        self.q_current[4] = msg.pose.pose.orientation.y
-        self.q_current[5] = msg.pose.pose.orientation.z
-        self.q_current[6] = msg.pose.pose.orientation.w
+        t_meas = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
 
-        self.v_current[0] = msg.twist.twist.linear.x
-        self.v_current[1] = msg.twist.twist.linear.y
-        self.v_current[2] = msg.twist.twist.linear.z
-        self.v_current[3] = msg.twist.twist.angular.x
-        self.v_current[4] = msg.twist.twist.angular.y
-        self.v_current[5] = msg.twist.twist.angular.z
-    
+        pos_meas = msg.pose.pose.position.x, \
+                   msg.pose.pose.position.y, \
+                   msg.pose.pose.position.z
+        quat_meas = msg.pose.pose.orientation.x, \
+                    msg.pose.pose.orientation.y, \
+                    msg.pose.pose.orientation.z, \
+                    msg.pose.pose.orientation.w
+
+        v_meas = msg.twist.twist.linear.x, \
+                 msg.twist.twist.linear.y, \
+                 msg.twist.twist.linear.z, \
+                 msg.twist.twist.angular.x, \
+                 msg.twist.twist.angular.y, \
+                 msg.twist.twist.angular.z
+
+        # Filter base position and orientation
+        b = 0.
+        if self.t_pose_update is not None and self.base_filter_fq > 0.:
+            b = 1. / (1 + 2 * 3.14 * (t_meas - self.t_pose_update) * self.base_filter_fq)
+
+        self.q_current[:3] = [(1-b) * pos_meas[i] + b * self.q_current[i] for i in range(3)]
+        self.q_current[3:7] = [quat_meas[i] for i in range(4)]
+        self.v_current[:6] = [(1-b) * v_meas[i]   + b * self.v_current[i] for i in range(6)]
+        self.t_pose_update = t_meas
+
     def interpolate(self, v1, v2, delay):
         return  v1 * (self.MPC_timestep - delay) / self.MPC_timestep + v2 * (delay / self.MPC_timestep)
     
@@ -163,11 +181,11 @@ class MpcSubscriber(Node):
         if current_tqva is None:
             return # No state received yet
 
+        currentTime = current_tqva[0]
         self.q_current[7:] = current_tqva[1]
         self.v_current[6:] = current_tqva[2]
 
-        currentTime = current_tqva[0]
-        
+
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
         #self.get_logger().info('Delay : "%s"' % delay)
         #if not(self.start_mpc):
@@ -191,6 +209,11 @@ class MpcSubscriber(Node):
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
             self.torqueCommand = u_interpolated - self.K0 @ self.space.difference(x_measured, x_interpolated)
+
+        x_measured = np.concatenate((self.q_current, self.v_current))
+        debug_msg = Float64MultiArray()
+        debug_msg.data = x_measured.ravel().tolist()
+        self.debug_filter_pub.publish(debug_msg)
 
         if (self.robotIf.is_init):
             self.robotIf.send_command(self.jointCommand.tolist(),
