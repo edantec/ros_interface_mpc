@@ -187,11 +187,10 @@ class MpcSubscriber(Node):
                 u_interpolated = self.u2
 
             x_measured = np.concatenate((self.q_current, self.v_current))
-            u_corrected = u_interpolated - 0.5 * self.K0 @ self.space.difference(x_measured, x_interpolated)
 
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
-            self.torqueCommand = u_corrected
+            self.torqueCommand = u_interpolated - self.K0 @ self.space.difference(x_measured, x_interpolated)
 
         if (self.robotIf.is_init):
             self.robotIf.send_command(self.jointCommand.tolist(),

@@ -233,10 +233,10 @@ class Go2Parameters():
 
         if (mpc_type == "fulldynamics"):
             w_basepos = [0, 0, 0, 0, 0, 0]
-            w_legpos = [1, 1, 1]
+            w_legpos = [0.1, 0.1, 0.1]
 
-            w_basevel = [0, 0, 0, 10, 10, 10]
-            w_legvel = [0.1, 0.1, 0.1]
+            w_basevel = [100, 100, 100, 10, 10, 10]
+            w_legvel = [1, 1, 1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
             w_cent_lin = np.array([0.1, 0.1, 1])
             w_cent_ang = np.array([0.1, 0.1, 1])
@@ -252,7 +252,7 @@ class Go2Parameters():
                 gravity=gravity,
                 force_size=3,
                 w_forces=np.diag(w_forces_lin),
-                w_frame=np.eye(3) * 1000,
+                w_frame=np.eye(3) * 5000,
                 umin=-self.handler.getModel().effortLimit[6:],
                 umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
@@ -320,7 +320,7 @@ class ControlBlockGo2():
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
-        self.T = 30
+        self.T = 50
         
         if mpc_type == "fulldynamics":
             problem = FullDynamicsProblem(self.param.handler)
@@ -330,7 +330,7 @@ class ControlBlockGo2():
         problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
         
         if self.motion == "walk":
-            self.T_fly = 20
+            self.T_fly = 40
             self.T_contact = 10
         elif self.motion == "jump":
             self.T_fly = 20
@@ -342,7 +342,7 @@ class ControlBlockGo2():
             mu_init=1e-8,
             max_iters=1,
             num_threads=8,
-            swing_apex=0.1,
+            swing_apex=0.3,
             T_fly=self.T_fly,
             T_contact=self.T_contact,
             T=self.T,
