@@ -169,13 +169,13 @@ class MpcSubscriber(Node):
         currentTime = current_tqva[0]
         
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
-        self.get_logger().info('Delay : "%s"' % delay)
+        #self.get_logger().info('Delay : "%s"' % delay)
         #if not(self.start_mpc):
             #self.get_logger().info('Default control')
             #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         if self.start_mpc:
-            #self.Kp = [0.]*12
-            #self.Kd = [0.]*12
+            self.Kp = [0.]*12
+            self.Kd = [0.]*12
             if delay < self.MPC_timestep:
                 self.jointCommand = self.interpolate(self.x0[7:self.nq], self.x1[7:self.nq], delay)
                 self.velocityCommand = self.interpolate(self.x0[self.nq + 6:], self.x1[self.nq + 6:], delay)
@@ -194,7 +194,7 @@ class MpcSubscriber(Node):
         if (self.robotIf.is_init):
             self.robotIf.send_command(self.jointCommand.tolist(),
                                     self.velocityCommand.tolist(),
-                                    self.torqueCommand.tolist(),
+                                    self.current_torque.tolist(),
                                     self.Kp, #self.Kp.tolist(),
                                     self.Kd #self.Kd.tolist()
             )

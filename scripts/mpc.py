@@ -330,8 +330,8 @@ class ControlBlockGo2():
         problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
         
         if self.motion == "walk":
-            self.T_fly = 30
-            self.T_contact = 5
+            self.T_fly = 20
+            self.T_contact = 10
         elif self.motion == "jump":
             self.T_fly = 20
             self.T_contact = 100
@@ -342,7 +342,7 @@ class ControlBlockGo2():
             mu_init=1e-8,
             max_iters=1,
             num_threads=8,
-            swing_apex=0.3,
+            swing_apex=0.1,
             T_fly=self.T_fly,
             T_contact=self.T_contact,
             T=self.T,
