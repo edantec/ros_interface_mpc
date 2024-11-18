@@ -17,6 +17,7 @@
 import rclpy
 from rclpy.node import Node
 import numpy as np
+import rclpy.time
 
 import pinocchio as pin
 from ros_interface_mpc.msg import Torque, State
@@ -165,7 +166,7 @@ class MpcSubscriber(Node):
         self.q_current[7:] = current_tqva[1]
         self.v_current[6:] = current_tqva[2]
 
-        currentTime = self.get_clock().now().nanoseconds * 1e-9
+        currentTime = current_tqva[0]
         
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
         self.get_logger().info('Delay : "%s"' % delay)
@@ -199,11 +200,11 @@ class MpcSubscriber(Node):
             )
 
             state = State()
-            state.stamp = self.get_clock().now().to_msg()
+            state.stamp = rclpy.time.Time(seconds=currentTime).to_msg()
             state.qc = self.q_current.tolist()
             state.vc = self.v_current.tolist()
             self.robot_pub.publish(state)
-        
+
 
 def main(args=None):
     rclpy.init(args=args)
