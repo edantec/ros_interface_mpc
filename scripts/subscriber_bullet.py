@@ -174,27 +174,29 @@ class MpcSubscriber(Node):
             #self.get_logger().info('Default control')
             #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         if self.start_mpc:
-            self.Kp = [0.]*12
-            self.Kd = [0.]*12
+            self.Kp = [10.]*12
+            self.Kd = [1.]*12
             if delay < self.MPC_timestep:
-                self.jointCommand = self.interpolate(self.x0[7:self.nq], self.x1[7:self.nq], delay)
-                self.velocityCommand = self.interpolate(self.x0[self.nq + 6:], self.x1[self.nq + 6:], delay)
-                self.torqueCommand = self.interpolate(self.u0, self.u1, delay)
+                x_interpolated = self.interpolate(self.x0, self.x1, delay)
+                u_interpolated = self.interpolate(self.u0, self.u1, delay)
             elif delay < 2 * self.MPC_timestep:
-                self.jointCommand = self.interpolate(self.x1[7:self.nq], self.x2[7:self.nq], delay - self.MPC_timestep)
-                self.velocityCommand = self.interpolate(self.x1[self.nq + 6:], self.x2[self.nq + 6:], delay - self.MPC_timestep)
-                self.torqueCommand = self.interpolate(self.u1, self.u2, delay - self.MPC_timestep)
+                x_interpolated = self.interpolate(self.x1, self.x2, delay)
+                u_interpolated = self.interpolate(self.u1, self.u2, delay)
             else:
-                self.jointCommand = self.x2[7:self.nq]
-                self.velocityCommand = self.x2[self.nq + 6:]
-                self.torqueCommand = self.u2
+                x_interpolated = self.x2
+                u_interpolated = self.u2
+
             x_measured = np.concatenate((self.q_current, self.v_current))
-            self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
+            u_corrected = u_interpolated - 0.5 * self.K0 @ self.space.difference(x_measured, x_interpolated)
+
+            self.jointCommand = x_interpolated[7:self.nq]
+            self.velocityCommand = x_interpolated[self.nq + 6:]
+            self.torqueCommand = u_corrected
 
         if (self.robotIf.is_init):
             self.robotIf.send_command(self.jointCommand.tolist(),
                                     self.velocityCommand.tolist(),
-                                    self.current_torque.tolist(),
+                                    self.torqueCommand.tolist(),
                                     self.Kp, #self.Kp.tolist(),
                                     self.Kd #self.Kd.tolist()
             )
