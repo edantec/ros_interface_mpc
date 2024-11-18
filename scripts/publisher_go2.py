@@ -96,9 +96,10 @@ class MpcPublisher(Node):
         else:
             self.mpc_block.mpc.switchToStand()
 
-        self.mpc_block.update_mpc(self.x0)
         msg = Torque()
         msg.stamp = self.stamp
+        self.mpc_block.update_mpc(self.x0)
+
         if self.parameter.value == "fulldynamics":
             msg.x0 = self.mpc_block.mpc.xs[0].tolist()
             msg.x1 = self.mpc_block.mpc.xs[1].tolist()
