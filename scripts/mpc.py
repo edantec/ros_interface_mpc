@@ -232,15 +232,15 @@ class Go2Parameters():
             u0_forces[6 * i + 2] = -gravity[2] * self.handler.getMass() / 2
 
         if (mpc_type == "fulldynamics"):
-            w_basepos = [0, 0, 0, 0, 0, 0]
+            w_basepos = [0, 0, 1, 0, 0, 0]
             w_legpos = [0.1, 0.1, 0.1]
 
-            w_basevel = [100, 100, 100, 10, 10, 10]
+            w_basevel = [10, 10, 10, 10, 10, 10]
             w_legvel = [1, 1, 1]
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
-            w_cent_lin = np.array([0.1, 0.1, 1])
+            w_cent_lin = np.array([1, 1, 1])
             w_cent_ang = np.array([0.1, 0.1, 1])
-            w_forces_lin = np.array([0.001, 0.001, 0.001])
+            w_forces_lin = np.array([0.0002, 0.0002, 0.0002])
 
             nu = self.handler.getModel().nv - 6
         
