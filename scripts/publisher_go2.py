@@ -20,6 +20,7 @@ from rclpy.node import Node
 from ros_interface_mpc.msg import Torque, State
 from sensor_msgs.msg import Joy
 from rclpy.qos import QoSProfile
+from rclpy.time import Time
 
 import numpy as np
 
@@ -56,6 +57,7 @@ class MpcPublisher(Node):
 
         self.commanded_vel = np.zeros(6)
         self.walking = False
+        self.stamp = Time.to_msg(self.get_clock().now())
 
         self.subscription = self.create_subscription(
             State,
@@ -72,6 +74,7 @@ class MpcPublisher(Node):
         self.subinput  # prevent unused variable warning
 
     def listener_callback(self, msg):
+        self.stamp = msg.stamp
         self.x0 = np.array(msg.qc + msg.vc)
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
     
@@ -95,7 +98,7 @@ class MpcPublisher(Node):
 
         self.mpc_block.update_mpc(self.x0)
         msg = Torque()
-        msg.stamp = self.get_clock().now().to_msg()
+        msg.stamp = self.stamp
         if self.parameter.value == "fulldynamics":
             msg.x0 = self.mpc_block.mpc.xs[0].tolist()
             msg.x1 = self.mpc_block.mpc.xs[1].tolist()

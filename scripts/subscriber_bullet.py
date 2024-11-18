@@ -21,6 +21,7 @@ import numpy as np
 import pinocchio as pin
 from ros_interface_mpc.msg import Torque, State
 from rclpy.qos import QoSProfile
+from rclpy.time import Time
 
 from nav_msgs.msg import Odometry
 
@@ -109,7 +110,7 @@ class MpcSubscriber(Node):
         self.Kp = [150.]*12
         self.Kd = [10.]*12
 
-        self.LastCommandTimeStamp = self.get_clock().now().nanoseconds * 1e-9
+        self.timeStamp = self.get_clock().now()
         self.jointCommand = np.array([
             0.0899, 0.8130, -1.596, 
             -0.0405, 0.824, -1.595, 
@@ -117,6 +118,11 @@ class MpcSubscriber(Node):
             -0.1354, 0.820, -1.593
         ])
         self.velocityCommand = np.zeros(12)
+        self.torqueCommand = np.array([-3.71, -1.81,  5.25,
+            3.14, -1.37, 5.54,
+            -1.39, -1.09,  3.36,
+            1.95, -0.61,  3.61
+        ])
         self.MPC_timestep = 0.01
 
 
@@ -128,7 +134,7 @@ class MpcSubscriber(Node):
         self.x1 = np.array(msg.x1.tolist())
         self.x2 = np.array(msg.x2.tolist())
         self.K0 = np.array(msg.k0.tolist()).reshape((self.nu, self.ndx))
-        self.LastCommandTimeStamp = self.get_clock().now().nanoseconds * 1e-9
+        self.timeStamp = Time.from_msg(msg.stamp)
 
         self.start_mpc = True
 
@@ -161,8 +167,8 @@ class MpcSubscriber(Node):
 
         currentTime = self.get_clock().now().nanoseconds * 1e-9
         
-        delay = currentTime - self.LastCommandTimeStamp
-        #self.get_logger().info('Delay : "%s"' % delay)
+        delay = currentTime - self.timeStamp.nanoseconds * 1e-9
+        self.get_logger().info('Delay : "%s"' % delay)
         #if not(self.start_mpc):
             #self.get_logger().info('Default control')
             #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
@@ -172,19 +178,22 @@ class MpcSubscriber(Node):
             if delay < self.MPC_timestep:
                 self.jointCommand = self.interpolate(self.x0[7:self.nq], self.x1[7:self.nq], delay)
                 self.velocityCommand = self.interpolate(self.x0[self.nq + 6:], self.x1[self.nq + 6:], delay)
+                self.torqueCommand = self.interpolate(self.u0, self.u1, delay)
             elif delay < 2 * self.MPC_timestep:
                 self.jointCommand = self.interpolate(self.x1[7:self.nq], self.x2[7:self.nq], delay - self.MPC_timestep)
                 self.velocityCommand = self.interpolate(self.x1[self.nq + 6:], self.x2[self.nq + 6:], delay - self.MPC_timestep)
+                self.torqueCommand = self.interpolate(self.u1, self.u2, delay - self.MPC_timestep)
             else:
                 self.jointCommand = self.x2[7:self.nq]
                 self.velocityCommand = self.x2[self.nq + 6:]
+                self.torqueCommand = self.u2
             x_measured = np.concatenate((self.q_current, self.v_current))
             self.current_torque = self.u0 - self.K0 @ self.space.difference(x_measured, self.x0)
 
         if (self.robotIf.is_init):
             self.robotIf.send_command(self.jointCommand.tolist(),
                                     self.velocityCommand.tolist(),
-                                    self.current_torque.tolist(),
+                                    self.torqueCommand.tolist(),
                                     self.Kp, #self.Kp.tolist(),
                                     self.Kd #self.Kd.tolist()
             )
