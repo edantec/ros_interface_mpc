@@ -32,14 +32,58 @@ from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
 import threading
+from simple_mpc import IDSolver, RobotHandler
+import example_robot_data
 
 class MpcSubscriber(Node):
 
     def __init__(self):
         # Initialization of node
         super().__init__('mpc_subscriber')
+        self.declare_parameter('mpc_type')
+        self.parameter = self.get_parameter('mpc_type')
         self.robotIf = Go2RobotInterface(self)
         self.start_mpc = False
+
+        SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
+        URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
+        modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
+        design_conf = dict(
+            urdf_path=modelPath + URDF_SUBPATH,
+            srdf_path=modelPath + SRDF_SUBPATH,
+            robot_description="",
+            root_name="root_joint",
+            base_configuration="standing",
+            controlled_joints_names=[
+                "root_joint",
+                "FL_hip_joint",
+                "FL_thigh_joint",
+                "FL_calf_joint",
+                "FR_hip_joint",
+                "FR_thigh_joint",
+                "FR_calf_joint",
+                "RL_hip_joint",
+                "RL_thigh_joint",
+                "RL_calf_joint",
+                "RR_hip_joint",
+                "RR_thigh_joint",
+                "RR_calf_joint",
+            ],
+            end_effector_names=[
+                "FL_foot",
+                "FR_foot",
+                "RL_foot",
+                "RR_foot",
+            ],
+            hip_names=[
+                "FL_thigh",
+                "FR_thigh",
+                "RL_thigh",
+                "RR_thigh",
+            ],
+        )
+        self.handler = RobotHandler()
+        self.handler.initialize(design_conf)
 
         # Define state publisher
         qos_profile = QoSProfile(depth=10)
@@ -121,12 +165,32 @@ class MpcSubscriber(Node):
         self.t_pose_update = None
         self.debug_filter_pub = self.create_publisher(Float64MultiArray, "debug_filter", 10)
 
+        """ Initialize whole-body inverse dynamics QP"""
+        id_conf = dict(
+            contact_ids=self.handler.getFeetIds(),
+            x0=self.x0,
+            mu=0.8,
+            Lfoot=0.01,
+            Wfoot=0.01,
+            force_size=3,
+            kd=0,
+            w_force=100,
+            w_acc=1,
+            verbose=False,
+        )
+
+        self.qp = IDSolver()
+        self.qp.initialize(id_conf, self.rmodel)
+
 
     def listener_callback(self, msg):
         self.us = multiarray_to_numpy_float64(msg.us)
         self.xs = multiarray_to_numpy_float64(msg.xs)
         self.K0 = multiarray_to_numpy_float64(msg.k0)
         self.timeStamp = Time.from_msg(msg.stamp)
+        self.a0 = np.array(msg.a0.tolist())
+        self.contact_states = msg.contact_states
+        self.forces = np.array(msg.forces.tolist())
 
         self.start_mpc = True
 
@@ -172,6 +236,7 @@ class MpcSubscriber(Node):
 
 
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
+        #self.get_logger().info('Delay : "%s"' % delay)
         if self.start_mpc:
             self.Kp = [10.]*self.nu
             self.Kd = [1.]*self.nu
@@ -191,7 +256,20 @@ class MpcSubscriber(Node):
 
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
-            self.torqueCommand = u_interpolated - self.K0 @ self.space.difference(x_measured, x_interpolated)
+            if self.parameter.value == "fulldynamics":
+                self.torqueCommand = u_interpolated - 1 * self.K0 @ self.space.difference(x_measured, x_interpolated)
+            elif self.parameter.value == "kinodynamics":
+                self.handler.updateState(self.q_current, self.v_current, True)
+                self.qp.solve_qp(
+                    self.handler.getData(),
+                    self.contact_states,
+                    self.v_current,
+                    self.a0,
+                    self.forces,
+                    self.handler.getMassMatrix(),
+                )
+                self.torqueCommand = self.qp.solved_torque
+                #self.get_logger().info(f"torque : {self.torqueCommand}")
 
         x_measured = np.concatenate((self.q_current, self.v_current))
         debug_msg = Float64MultiArray()

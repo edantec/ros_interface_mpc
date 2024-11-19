@@ -59,6 +59,7 @@ class MpcPublisher(Node):
         self.commanded_vel = np.zeros(6)
         self.walking = False
         self.stamp = Time.to_msg(self.get_clock().now())
+        self.timeToWalk = 0
 
         self.subscription = self.create_subscription(
             State,
@@ -80,7 +81,7 @@ class MpcPublisher(Node):
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
     
     def listener_callback_input(self, msg):
-        self.commanded_vel[0] = msg.axes[1] * 0.25 #m/s
+        self.commanded_vel[0] = msg.axes[1] * 0.25#m/s
         self.commanded_vel[1] = msg.axes[0] * 0.25 #m/s
         self.commanded_vel[5] = msg.axes[2] * 0.15
 
@@ -92,17 +93,20 @@ class MpcPublisher(Node):
             self.walking = False
 
     def timer_callback(self):
+        self.timeToWalk += 1
         if self.walking:
             self.mpc_block.mpc.switchToWalk(self.commanded_vel)
         else:
             self.mpc_block.mpc.switchToStand()
+        
+        """ if (self.timeToWalk >= 300):
+            self.mpc_block.mpc.switchToWalk(self.commanded_vel) """
 
         msg = Torque()
         msg.stamp = self.stamp
         self.mpc_block.update_mpc(self.x0)
-
+        msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:3])
         if self.parameter.value == "fulldynamics":
-            msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:3])
             msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:3])
             msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
             msg.ndx = self.ndx
