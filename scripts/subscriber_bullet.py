@@ -105,9 +105,9 @@ class MpcSubscriber(Node):
             1)
         self.subscription_odom  # prevent unused variable warning
 
-        # Define at which rate the simulation state is sent to rviz
-        timer_period = 0.001  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        # Main control loop
+        control_period = 0.001  # seconds
+        self.timer = self.create_timer(control_period, self.control_loop)
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
@@ -222,10 +222,8 @@ class MpcSubscriber(Node):
         self.v_current[:6] = [(1-b) * v_meas[i]   + b * self.v_current[i] for i in range(6)]
         self.t_pose_update = t_meas
 
-    def interpolate(self, v1, v2, delay):
-        return  v1 * (self.MPC_timestep - delay) / self.MPC_timestep + v2 * (delay / self.MPC_timestep)
-    
-    def timer_callback(self):
+    # Main control loop
+    def control_loop(self):
         current_tqva = self.robotIf.get_joint_state()
         if current_tqva is None:
             return # No state received yet
