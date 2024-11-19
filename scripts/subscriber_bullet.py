@@ -184,22 +184,20 @@ class MpcSubscriber(Node):
 
 
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
-        #self.get_logger().info('Delay : "%s"' % delay)
-        #if not(self.start_mpc):
-            #self.get_logger().info('Default control')
-            #self.current_torque = self.u0 #- self.Kp @ (self.q_current[7:] - self.default_standing) - self.Kd @ self.v_current[6:]
         if self.start_mpc:
             self.Kp = [10.]*12
             self.Kd = [1.]*12
-            if delay < self.MPC_timestep:
-                x_interpolated = self.interpolate(self.x0, self.x1, delay)
-                u_interpolated = self.interpolate(self.u0, self.u1, delay)
-            elif delay < 2 * self.MPC_timestep:
-                x_interpolated = self.interpolate(self.x1, self.x2, delay)
-                u_interpolated = self.interpolate(self.u1, self.u2, delay)
+
+            step_nb = int(delay // self.MPC_timestep)
+            step_progress = (delay % self.MPC_timestep) / self.MPC_timestep
+            if(step_nb >= len(self.xs) -1):
+                step_nb = len(self.xs) - 1
+                step_progress = 0.0
+                x_interpolated = self.xs[step_nb]
+                u_interpolated = self.us[step_nb]
             else:
-                x_interpolated = self.x2
-                u_interpolated = self.u2
+                x_interpolated = self.xs[step_nb + 1] * step_progress  + self.xs[step_nb] * (1. - step_progress)
+                u_interpolated = self.us[step_nb + 1] * step_progress  + self.us[step_nb] * (1. - step_progress)
 
             x_measured = np.concatenate((self.q_current, self.v_current))
 
