@@ -27,7 +27,7 @@ include_directories(${EIGEN_INCLUDE_DIRS})
 find_package(rosidl_default_generators REQUIRED)
 
 # Install Python modules
-#ament_python_install_package(${PROJECT_NAME})
+ament_python_install_package(${PROJECT_NAME}_utils)
 
 set(msg_files
   "msg/State.msg"

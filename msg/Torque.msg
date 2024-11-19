@@ -1,13 +1,9 @@
 builtin_interfaces/Time stamp
 int64 ndx
 int64 nu
-float64[] k0
-float64[] x0
-float64[] x1
-float64[] x2
-float64[] u0
-float64[] u1
-float64[] u2
+std_msgs/Float64MultiArray k0
+std_msgs/Float64MultiArray xs
+std_msgs/Float64MultiArray us
 bool[] contact_states
 float64[] forces
 float64[] a0

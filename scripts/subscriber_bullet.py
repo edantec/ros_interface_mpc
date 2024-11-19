@@ -19,10 +19,11 @@ from rclpy.node import Node
 import numpy as np
 import rclpy.time
 
-import pinocchio as pin
 from ros_interface_mpc.msg import Torque, State
 from rclpy.qos import QoSProfile
 from rclpy.time import Time
+from ros_interface_mpc_utils.conversions import multiarray_to_numpy_float64
+
 
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64MultiArray
@@ -134,13 +135,9 @@ class MpcSubscriber(Node):
 
 
     def listener_callback(self, msg):
-        self.u0 = np.array(msg.u0.tolist())
-        self.u1 = np.array(msg.u1.tolist())
-        self.u2 = np.array(msg.u2.tolist())
-        self.x0 = np.array(msg.x0.tolist())
-        self.x1 = np.array(msg.x1.tolist())
-        self.x2 = np.array(msg.x2.tolist())
-        self.K0 = np.array(msg.k0.tolist()).reshape((self.nu, self.ndx))
+        self.us = multiarray_to_numpy_float64(msg.us)
+        self.xs = multiarray_to_numpy_float64(msg.xs)
+        self.K0 = multiarray_to_numpy_float64(msg.k0)
         self.timeStamp = Time.from_msg(msg.stamp)
 
         self.start_mpc = True
