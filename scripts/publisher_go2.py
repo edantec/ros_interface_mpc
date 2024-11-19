@@ -106,8 +106,8 @@ class MpcPublisher(Node):
         msg.stamp = self.stamp
         self.mpc_block.update_mpc(self.x0)
         msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:3])
+        msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:3])
         if self.parameter.value == "fulldynamics":
-            msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:3])
             msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
             msg.ndx = self.ndx
             msg.nu = self.nu
