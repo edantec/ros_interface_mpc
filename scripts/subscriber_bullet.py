@@ -77,55 +77,43 @@ class MpcSubscriber(Node):
         self.rmodel, geom_model = loadGo2()
 
         self.space = manifolds.MultibodyPhaseSpace(self.rmodel)
-
-        self.q_current = np.array([0., 0., 0.335, 0., 0., 0., 1.,
-            0.0899, 0.8130, -1.596, 
-            -0.0405, 0.824, -1.595, 
-            0.1695, 0.824, -1.606, 
-            -0.1354, 0.820, -1.593
-        ])
-        """ self.default_standing = np.array([
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-            0.068, 0.785, -1.440,
-            -0.068, 0.785, -1.440,
-        ]) """
-        self.default_standing = np.array([
-            0.0899, 0.8130, -1.596, 
-            -0.0405, 0.824, -1.595, 
-            0.1695, 0.824, -1.606, 
-            -0.1354, 0.820, -1.593
-        ])
-        self.v_current = np.zeros(18)
-
         self.ndx = 36
         self.nu = 12
         self.nq = 19
-        self.x0 = np.concatenate((self.q_current, self.v_current))
-        self.u0 = np.array([-3.71, -1.81,  5.25,
-                            3.14, -1.37, 5.54,
-                            -1.39, -1.09,  3.36,
-                            1.95, -0.61,  3.61])
-        self.K0 = np.zeros((12, 36))
+        self.nv = 18
 
-        # Define default PD controller that runs before MPC launch
-        gain = 100
-        self.Kp = [150.]*12
-        self.Kd = [10.]*12
-
-        self.timeStamp = self.get_clock().now()
-        self.jointCommand = np.array([
-            0.0899, 0.8130, -1.596, 
-            -0.0405, 0.824, -1.595, 
-            0.1695, 0.824, -1.606, 
+        # Define a default configuration
+        self.default_standing_q = np.array([
+            0., 0., 0.335, 0., 0., 0., 1.,
+            0.0899, 0.8130, -1.596,
+            -0.0405, 0.824, -1.595,
+            0.1695, 0.824, -1.606,
             -0.1354, 0.820, -1.593
         ])
-        self.velocityCommand = np.zeros(12)
-        self.torqueCommand = np.array([-3.71, -1.81,  5.25,
+        self.default_standing_v = np.zeros(self.nv)
+        self.default_standing_u = np.array([
+            -3.71, -1.81,  5.25,
             3.14, -1.37, 5.54,
             -1.39, -1.09,  3.36,
             1.95, -0.61,  3.61
         ])
+
+        # Start state
+        self.q_current = self.default_standing_q.copy()
+        self.v_current = self.default_standing_v.copy()
+        self.x0 = np.concatenate((self.q_current, self.v_current))
+        self.u0 = self.default_standing_u.copy()
+        self.K0 = np.zeros((self.nu, self.ndx))
+
+        # Initial commands to be use before MPC is launched
+        gain = 100
+        self.Kp = [150.] * self.nu
+        self.Kd = [10.] * self.nu
+
+        self.timeStamp = self.get_clock().now()
+        self.jointCommand = self.default_standing_q[7:]
+        self.velocityCommand = self.default_standing_v[6:]
+        self.torqueCommand = self.default_standing_u.copy()
         self.MPC_timestep = 0.01
 
         # For filtering base position and velocity
@@ -185,8 +173,8 @@ class MpcSubscriber(Node):
 
         delay = currentTime - self.timeStamp.nanoseconds * 1e-9
         if self.start_mpc:
-            self.Kp = [10.]*12
-            self.Kd = [1.]*12
+            self.Kp = [10.]*self.nu
+            self.Kd = [1.]*self.nu
 
             step_nb = int(delay // self.MPC_timestep)
             step_progress = (delay % self.MPC_timestep) / self.MPC_timestep
@@ -232,7 +220,7 @@ def main(args=None):
 
     thread = threading.Thread(target=rclpy.spin, args=(mpc_subscriber, ), daemon=True)
     thread.start()
-    mpc_subscriber.robotIf.start(mpc_subscriber.default_standing.tolist())
+    mpc_subscriber.robotIf.start(mpc_subscriber.default_standing_q[7:].tolist())
     input("Ready to start...")
 
     thread.join()
