@@ -171,8 +171,9 @@ class MpcSubscriber(Node):
 
         self.qp = IDSolver()
         self.qp.initialize(id_conf, self.rmodel)
-        self.robotIf.register_callback(self.control_loop)
 
+        self.robotIf.start_async(self.default_standing_q[7:].tolist())
+        self.robotIf.register_callback(self.control_loop)
 
     def joint_state_callback(self, msg):
         self.us = multiarray_to_numpy_float64(msg.us)
@@ -254,7 +255,7 @@ class MpcSubscriber(Node):
         debug_msg.data = x_measured.ravel().tolist()
         self.debug_filter_pub.publish(debug_msg)
 
-        if (self.robotIf.is_init):
+        if (self.robotIf.is_ready):
             self.robotIf.send_command(self.jointCommand.tolist(),
                                     self.velocityCommand.tolist(),
                                     self.torqueCommand.tolist(),
@@ -276,17 +277,8 @@ def main(args=None):
     rclpy.init(args=args)
 
     mpc_subscriber = MpcSubscriber()
+    rclpy.spin(mpc_subscriber)
 
-    thread = threading.Thread(target=rclpy.spin, args=(mpc_subscriber, ), daemon=True)
-    thread.start()
-    mpc_subscriber.robotIf.start(mpc_subscriber.default_standing_q[7:].tolist())
-    input("Ready to start...")
-
-    thread.join()
-
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     mpc_subscriber.destroy_node()
     rclpy.shutdown()
 
