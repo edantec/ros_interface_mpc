@@ -31,7 +31,6 @@ from std_msgs.msg import Float64MultiArray, Float64
 from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
-import threading
 from simple_mpc import IDSolver, RobotHandler
 import example_robot_data
 
