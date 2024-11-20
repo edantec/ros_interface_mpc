@@ -238,11 +238,11 @@ class MpcSubscriber(Node):
             if self.parameter.value == "fulldynamics":
                 self.torqueCommand = u_interpolated - 1 * self.K0 @ self.space.difference(x_measured, x_interpolated)
             elif self.parameter.value == "kinodynamics":
-                self.handler.updateState(q, v, True)
+                self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
                 self.qp.solve_qp(
                     self.handler.getData(),
                     self.contact_states,
-                    self.v_current,
+                    x_measured[self.nq:],
                     self.a0,
                     self.forces,
                     self.handler.getMassMatrix(),
