@@ -163,7 +163,13 @@ class MpcSubscriber(Node):
         # For filtering base position and velocity
         self.base_filter_fq = self.declare_parameter("base_filter_fq", -1.0).value # By default no filter
         self.t_pose_update = None
-        self.debug_filter_pub = self.create_publisher(Float64MultiArray, "debug_filter", 10)
+
+        # Debugging purposes
+        self.debug_filter_pub = self.create_publisher(Float64MultiArray, "/debug/filtered_state", 10)
+        self.debug_timing_pub = self.create_publisher(Float64MultiArray, "/debug/loop_time_batched", 10)
+        self.debug_timing_msg = Float64MultiArray()
+        self.debug_timing_msg.data = [0.] * 100
+        self.debug_timing_index = 0
 
         """ Initialize whole-body inverse dynamics QP"""
         id_conf = dict(
@@ -288,6 +294,12 @@ class MpcSubscriber(Node):
             state.vc = self.v_current.tolist()
             self.robot_pub.publish(state)
 
+        # Log delay
+        self.debug_timing_msg.data[self.debug_timing_index] = delay
+        self.debug_timing_index += 1
+        if self.debug_timing_index >= len(self.debug_timing_msg.data):
+            self.debug_timing_pub.publish(self.debug_timing_msg)
+            self.debug_timing_index = 0
 
 def main(args=None):
     rclpy.init(args=args)
