@@ -37,7 +37,7 @@ class MpcPublisher(Node):
         self.parameter = self.get_parameter('mpc_type')
         self.motion = self.get_parameter('motion_type')
         qos_profile = QoSProfile(depth=10)
-        
+
         self.publisher_ = self.create_publisher(Torque, 'command', qos_profile)
         timer_period = 0.01  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -45,7 +45,7 @@ class MpcPublisher(Node):
         self.mpc_block = ControlBlockGo2(self.parameter.value, self.motion.value)
         self.mpc_block.create_gait()
         self.mpc_block.mpc.switchToStand()
-        
+
         self.force_dim = 12
         self.ndx = self.mpc_block.param.handler.getModel().nv * 2
         self.nu = self.mpc_block.param.handler.getModel().nv - 6
@@ -61,25 +61,23 @@ class MpcPublisher(Node):
         self.stamp = Time.to_msg(self.get_clock().now())
         self.timeToWalk = 0
 
-        self.subscription = self.create_subscription(
+        self.state_subscription = self.create_subscription(
             State,
             'robot_states',
             self.listener_callback,
             1)
-        self.subscription  # prevent unused variable warning
 
-        self.subinput = self.create_subscription(
+        self.joystick_subsciption = self.create_subscription(
             Joy,
             'input',
             self.listener_callback_input,
             1)
-        self.subinput  # prevent unused variable warning
 
     def listener_callback(self, msg):
         self.stamp = msg.stamp
         self.x0 = np.array(msg.qc + msg.vc)
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
-    
+
     def listener_callback_input(self, msg):
         self.commanded_vel[0] = msg.axes[1] * 0.25#m/s
         self.commanded_vel[1] = msg.axes[0] * 0.25 #m/s
@@ -100,9 +98,6 @@ class MpcPublisher(Node):
             self.mpc_block.mpc.switchToWalk(self.commanded_vel)
         else:
             self.mpc_block.mpc.switchToStand()
-        
-        """ if (self.timeToWalk >= 300):
-            self.mpc_block.mpc.switchToWalk(self.commanded_vel) """
 
         msg = Torque()
         msg.stamp = self.stamp
