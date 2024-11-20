@@ -111,11 +111,6 @@ class MpcSubscriber(Node):
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
-        self.current_torque = np.array([-3.71, -1.81,  5.25,
-            3.14, -1.37, 5.54,
-            -1.39, -1.09,  3.36,
-            1.95, -0.61,  3.61
-        ])
 
         # Load the robot model
         self.rmodel, geom_model = loadGo2()
