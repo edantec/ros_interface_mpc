@@ -7,3 +7,4 @@ std_msgs/Float64MultiArray us
 bool[] contact_states
 float64[] forces
 float64[] a0
+float64 process_duration

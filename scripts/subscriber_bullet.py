@@ -26,7 +26,7 @@ from ros_interface_mpc_utils.conversions import multiarray_to_numpy_float64
 
 
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Float64
 
 from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
@@ -90,24 +90,18 @@ class MpcSubscriber(Node):
         self.robot_pub = self.create_publisher(State, 'robot_states', qos_profile)
 
         # Define command subscriber
-        self.subscription = self.create_subscription(
+        self.subscription_joints = self.create_subscription(
             Torque,
             'command',
-            self.listener_callback,
+            self.joint_state_callback,
             qos_profile)
-        self.subscription  # prevent unused variable warning
 
         # Define odometry subscriber
         self.subscription_odom = self.create_subscription(
             Odometry,
             'odometry/filtered',
-            self.listener_callback_odom,
+            self.odometry_callback,
             1)
-        self.subscription_odom  # prevent unused variable warning
-
-        # Main control loop
-        control_period = 0.001  # seconds
-        self.timer = self.create_timer(control_period, self.control_loop)
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
@@ -138,33 +132,28 @@ class MpcSubscriber(Node):
         ])
 
         # Start state
-        self.q_current = self.default_standing_q.copy()
-        self.v_current = self.default_standing_v.copy()
-        self.x0 = np.concatenate((self.q_current, self.v_current))
+        self.trajectoryStamp = self.get_clock().now()
+        self.x0 = np.concatenate((self.default_standing_q, self.default_standing_v))
         self.u0 = self.default_standing_u.copy()
         self.K0 = np.zeros((self.nu, self.ndx))
 
-        # Initial commands to be use before MPC is launched
-        gain = 100
-        self.Kp = [150.] * self.nu
-        self.Kd = [10.] * self.nu
-
-        self.timeStamp = self.get_clock().now()
+        self.Kp = [150.]*self.nu
+        self.Kd = 0.25 * np.sqrt(self.Kp)
         self.jointCommand = self.default_standing_q[7:]
         self.velocityCommand = self.default_standing_v[6:]
         self.torqueCommand = self.default_standing_u.copy()
         self.MPC_timestep = 0.01
 
         # For filtering base position and velocity
+        self.t_odom_update = None
+        self.base_pose = [0.,0.,0., 0.,0.,0.,1.]
+        self.base_vel = [0.,0.,0., 0.,0.,0.]
         self.base_filter_fq = self.declare_parameter("base_filter_fq", -1.0).value # By default no filter
-        self.t_pose_update = None
 
         # Debugging purposes
         self.debug_filter_pub = self.create_publisher(Float64MultiArray, "/debug/filtered_state", 10)
-        self.debug_timing_pub = self.create_publisher(Float64MultiArray, "/debug/loop_time_batched", 10)
-        self.debug_timing_msg = Float64MultiArray()
-        self.debug_timing_msg.data = [0.] * 100
-        self.debug_timing_index = 0
+        self.debug_timing_pub = self.create_publisher(Float64, "/debug/loop_time", 10)
+        self.debug_timing_msg = Float64()
 
         """ Initialize whole-body inverse dynamics QP"""
         id_conf = dict(
@@ -182,20 +171,21 @@ class MpcSubscriber(Node):
 
         self.qp = IDSolver()
         self.qp.initialize(id_conf, self.rmodel)
+        self.robotIf.register_callback(self.control_loop)
 
 
-    def listener_callback(self, msg):
+    def joint_state_callback(self, msg):
         self.us = multiarray_to_numpy_float64(msg.us)
         self.xs = multiarray_to_numpy_float64(msg.xs)
         self.K0 = multiarray_to_numpy_float64(msg.k0)
-        self.timeStamp = Time.from_msg(msg.stamp)
+        self.trajectoryStamp = Time.from_msg(msg.stamp)
         self.a0 = np.array(msg.a0.tolist())
         self.contact_states = msg.contact_states
         self.forces = np.array(msg.forces.tolist())
 
         self.start_mpc = True
 
-    def listener_callback_odom(self, msg):
+    def odometry_callback(self, msg):
         t_meas = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
 
         pos_meas = msg.pose.pose.position.x, \
@@ -215,27 +205,19 @@ class MpcSubscriber(Node):
 
         # Filter base position and orientation
         b = 0.
-        if self.t_pose_update is not None and self.base_filter_fq > 0.:
-            b = 1. / (1 + 2 * 3.14 * (t_meas - self.t_pose_update) * self.base_filter_fq)
+        if self.t_odom_update is not None and self.base_filter_fq > 0.:
+            b = 1. / (1 + 2 * 3.14 * (t_meas - self.t_odom_update) * self.base_filter_fq)
 
-        self.q_current[:3] = [(1-b) * pos_meas[i] + b * self.q_current[i] for i in range(3)]
-        self.q_current[3:7] = [quat_meas[i] for i in range(4)]
-        self.v_current[:6] = [(1-b) * v_meas[i]   + b * self.v_current[i] for i in range(6)]
-        self.t_pose_update = t_meas
+        self.base_pose[:3] = [(1-b) * pos_meas[i] + b * self.base_pose[i] for i in range(3)]
+        self.base_pose[3:] = [quat_meas[i] for i in range(4)]
+        self.base_vel      = [(1-b) * v_meas[i]   + b * self.base_vel[i] for i in range(6)]
+        self.t_odom_update = t_meas
 
     # Main control loop
-    def control_loop(self):
-        current_tqva = self.robotIf.get_joint_state()
-        if current_tqva is None:
-            return # No state received yet
+    def control_loop(self,t, q, v, a):
+        delay = t - self.trajectoryStamp.nanoseconds * 1e-9
+        x_measured = np.concatenate((self.base_pose, q, self.base_vel, v))
 
-        currentTime = current_tqva[0]
-        self.q_current[7:] = current_tqva[1]
-        self.v_current[6:] = current_tqva[2]
-
-
-        delay = currentTime - self.timeStamp.nanoseconds * 1e-9
-        #self.get_logger().info('Delay : "%s"' % delay)
         if self.start_mpc:
             self.Kp = [10.]*self.nu
             self.Kd = [1.]*self.nu
@@ -251,14 +233,12 @@ class MpcSubscriber(Node):
                 x_interpolated = self.xs[step_nb + 1] * step_progress  + self.xs[step_nb] * (1. - step_progress)
                 u_interpolated = self.us[step_nb + 1] * step_progress  + self.us[step_nb] * (1. - step_progress)
 
-            x_measured = np.concatenate((self.q_current, self.v_current))
-
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
             if self.parameter.value == "fulldynamics":
                 self.torqueCommand = u_interpolated - 1 * self.K0 @ self.space.difference(x_measured, x_interpolated)
             elif self.parameter.value == "kinodynamics":
-                self.handler.updateState(self.q_current, self.v_current, True)
+                self.handler.updateState(q, v, True)
                 self.qp.solve_qp(
                     self.handler.getData(),
                     self.contact_states,
@@ -270,7 +250,6 @@ class MpcSubscriber(Node):
                 self.torqueCommand = self.qp.solved_torque
                 #self.get_logger().info(f"torque : {self.torqueCommand}")
 
-        x_measured = np.concatenate((self.q_current, self.v_current))
         debug_msg = Float64MultiArray()
         debug_msg.data = x_measured.ravel().tolist()
         self.debug_filter_pub.publish(debug_msg)
@@ -284,17 +263,14 @@ class MpcSubscriber(Node):
             )
 
             state = State()
-            state.stamp = rclpy.time.Time(seconds=currentTime).to_msg()
-            state.qc = self.q_current.tolist()
-            state.vc = self.v_current.tolist()
+            state.stamp = rclpy.time.Time(seconds=t).to_msg()
+            state.qc = x_measured[:self.nq].tolist()
+            state.vc = x_measured[self.nq:].tolist()
             self.robot_pub.publish(state)
 
         # Log delay
-        self.debug_timing_msg.data[self.debug_timing_index] = delay
-        self.debug_timing_index += 1
-        if self.debug_timing_index >= len(self.debug_timing_msg.data):
-            self.debug_timing_pub.publish(self.debug_timing_msg)
-            self.debug_timing_index = 0
+        self.debug_timing_msg.data = delay
+        self.debug_timing_pub.publish(self.debug_timing_msg)
 
 def main(args=None):
     rclpy.init(args=args)

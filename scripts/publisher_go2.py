@@ -93,6 +93,8 @@ class MpcPublisher(Node):
             self.walking = False
 
     def timer_callback(self):
+        start_time = self.get_clock().now()
+
         self.timeToWalk += 1
         if self.walking:
             self.mpc_block.mpc.switchToWalk(self.commanded_vel)
@@ -118,6 +120,9 @@ class MpcPublisher(Node):
             msg.a0 = a0.tolist()
             msg.forces = self.mpc_block.mpc.us[0][:self.force_dim].tolist()
             msg.contact_states = self.mpc_block.mpc.getTrajOptProblem().stages[0].dynamics.differential_dynamics.contact_states.tolist()
+
+        duration = self.get_clock().now() - start_time
+        msg.process_duration = duration.nanoseconds * 1e-9
         self.publisher_.publish(msg)
         #self.get_logger().info('Publishing: "%s"' % msg.x0[0])
 
