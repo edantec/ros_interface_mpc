@@ -23,7 +23,11 @@ from rclpy.qos import QoSProfile
 from rclpy.time import Time
 
 import numpy as np
-from ros_interface_mpc_utils.conversions import numpy_to_multiarray_float64, listof_numpy_to_multiarray_float64
+from ros_interface_mpc_utils.conversions import (
+    numpy_to_multiarray_float64, 
+    listof_numpy_to_multiarray_float64, 
+    listof_numpy_to_multiarray_int8
+)
 
 from mpc import ControlBlockGo2
 
@@ -109,12 +113,20 @@ class MpcPublisher(Node):
             msg.ndx = self.ndx
             msg.nu = self.nu
         elif self.mpc_type == "kinodynamics":
-            a0 = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[0]\
-                .dynamics_data.continuous_data.xdot[self.nv:]
-            a0[6:] = self.mpc_block.mpc.us[0][self.force_dim:]
-            msg.a0 = a0.tolist()
-            msg.forces = self.mpc_block.mpc.us[0][:self.force_dim].tolist()
-            msg.contact_states = self.mpc_block.mpc.getTrajOptProblem().stages[0].dynamics.differential_dynamics.contact_states.tolist()
+            accs = []
+            forces = []
+            contact_states = []
+            for i in range(4):
+                a0 = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[i]\
+                    .dynamics_data.continuous_data.xdot[self.nv:]
+                a0[6:] = self.mpc_block.mpc.us[i][self.force_dim:]
+                accs.append(a0)
+                forces.append(self.mpc_block.mpc.us[i][:self.force_dim])
+                contact_states.append(self.mpc_block.mpc.getTrajOptProblem().stages[i].dynamics.differential_dynamics.contact_states)
+            
+            msg.a0 = listof_numpy_to_multiarray_float64(accs)
+            msg.forces = listof_numpy_to_multiarray_float64(forces)
+            msg.contact_states = listof_numpy_to_multiarray_int8(contact_states)
 
         duration = self.get_clock().now() - start_time
         msg.process_duration = duration.nanoseconds * 1e-9

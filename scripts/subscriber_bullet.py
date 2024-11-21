@@ -22,7 +22,7 @@ import rclpy.time
 from ros_interface_mpc.msg import Torque, State
 from rclpy.qos import QoSProfile
 from rclpy.time import Time
-from ros_interface_mpc_utils.conversions import multiarray_to_numpy_float64
+from ros_interface_mpc_utils.conversions import multiarray_to_numpy
 
 
 from nav_msgs.msg import Odometry
@@ -175,13 +175,13 @@ class MpcSubscriber(Node):
         self.robotIf.register_callback(self.control_loop)
 
     def joint_state_callback(self, msg):
-        self.us = multiarray_to_numpy_float64(msg.us)
-        self.xs = multiarray_to_numpy_float64(msg.xs)
-        self.K0 = multiarray_to_numpy_float64(msg.k0)
+        self.us = multiarray_to_numpy(msg.us)
+        self.xs = multiarray_to_numpy(msg.xs)
+        self.K0 = multiarray_to_numpy(msg.k0)
         self.trajectoryStamp = Time.from_msg(msg.stamp)
-        self.a0 = np.array(msg.a0.tolist())
-        self.contact_states = msg.contact_states
-        self.forces = np.array(msg.forces.tolist())
+        self.a0 = multiarray_to_numpy(msg.a0)
+        self.contact_states = multiarray_to_numpy(msg.contact_states)
+        self.forces = multiarray_to_numpy(msg.forces)
 
         self.start_mpc = True
 
@@ -217,6 +217,7 @@ class MpcSubscriber(Node):
     def control_loop(self,t, q, v, a):
         delay = t - self.trajectoryStamp.nanoseconds * 1e-9
         x_measured = np.concatenate((self.base_pose, q, self.base_vel, v))
+        #self.get_logger().info(f"Delay : {delay}")
 
         if self.start_mpc:
             self.Kp = [10.]*self.nu
@@ -229,10 +230,14 @@ class MpcSubscriber(Node):
                 step_progress = 0.0
                 x_interpolated = self.xs[step_nb]
                 u_interpolated = self.us[step_nb]
+                a_interpolated = self.a0[step_nb]
+                forces_interpolated = self.forces[step_nb]
             else:
                 x_interpolated = self.xs[step_nb + 1] * step_progress  + self.xs[step_nb] * (1. - step_progress)
                 u_interpolated = self.us[step_nb + 1] * step_progress  + self.us[step_nb] * (1. - step_progress)
-
+                a_interpolated = self.a0[step_nb + 1] * step_progress  + self.a0[step_nb] * (1. - step_progress)
+                forces_interpolated = self.forces[step_nb + 1] * step_progress  + self.forces[step_nb] * (1. - step_progress)
+            
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
             if self.parameter.value == "fulldynamics":
@@ -241,10 +246,10 @@ class MpcSubscriber(Node):
                 self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
                 self.qp.solve_qp(
                     self.handler.getData(),
-                    self.contact_states,
+                    [bool(self.contact_states[step_nb][i]) for i in range(4)],
                     x_measured[self.nq:],
-                    self.a0,
-                    self.forces,
+                    a_interpolated,
+                    forces_interpolated,
                     self.handler.getMassMatrix(),
                 )
                 self.torqueCommand = self.qp.solved_torque

@@ -4,7 +4,7 @@ int64 nu
 std_msgs/Float64MultiArray k0
 std_msgs/Float64MultiArray xs
 std_msgs/Float64MultiArray us
-bool[] contact_states
-float64[] forces
-float64[] a0
+std_msgs/Int8MultiArray contact_states
+std_msgs/Float64MultiArray forces
+std_msgs/Float64MultiArray a0
 float64 process_duration
