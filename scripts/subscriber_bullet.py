@@ -220,7 +220,7 @@ class MpcSubscriber(Node):
 
         if self.start_mpc:
             self.Kp = [10.]*self.nu
-            self.Kd = [1.]*self.nu
+            self.Kd = (np.sqrt(self.Kp)).tolist()
 
             step_nb = int(delay // self.MPC_timestep)
             step_progress = (delay % self.MPC_timestep) / self.MPC_timestep
@@ -236,7 +236,7 @@ class MpcSubscriber(Node):
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
             if self.parameter.value == "fulldynamics":
-                self.torqueCommand = u_interpolated - 1 * self.K0 @ self.space.difference(x_measured, x_interpolated)
+                self.torqueCommand = u_interpolated - 1.0 * self.K0 @ self.space.difference(x_measured, x_interpolated)
             elif self.parameter.value == "kinodynamics":
                 self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
                 self.qp.solve_qp(

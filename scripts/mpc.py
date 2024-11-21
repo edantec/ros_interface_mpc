@@ -59,22 +59,22 @@ class Go2Parameters():
 
         if (mpc_type == "fulldynamics"):
             # Weight for base position and orientation
-            w_basepos = [0, 0, 1, 0, 0, 0]
+            w_basepos = [0, 0, 0, 10., 10., 0]
 
             # Weight for leg position (hip, thigh, ankle)
-            w_legpos = [0.1, 0.1, 0.1]
+            w_legpos = [1., 1., 1.]
            
             # Weight for base linear and angular velocity
-            w_basevel = [10, 10, 10, 10, 10, 10]
+            w_basevel = [10., 10., 10., 1., 1., 10.]
 
             # Weight for leg velocity (hip, thigh, ankle)
-            w_legvel = [1, 1, 1]
+            w_legvel = [.1, .1, .1]
 
             # Concatenated state weight
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
 
             # Weight for linear momentum regularization
-            w_cent_lin = np.array([1, 1, 1])
+            w_cent_lin = np.array([.1, .1, 1.])
             # Weight for angular momentum regularization
             w_cent_ang = np.array([0.1, 0.1, 1])
 
@@ -196,7 +196,7 @@ class ControlBlockGo2():
         problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
         
         if self.motion == "walk":
-            self.T_fly = 30
+            self.T_fly = 20
             self.T_contact = 10
         elif self.motion == "jump":
             self.T_fly = 20
@@ -208,7 +208,7 @@ class ControlBlockGo2():
             mu_init=1e-8,
             max_iters=1,
             num_threads=num_threads,
-            swing_apex=0.2,
+            swing_apex=0.15,
             T_fly=self.T_fly,
             T_contact=self.T_contact,
             T=self.T,
