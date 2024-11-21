@@ -105,14 +105,13 @@ class MpcPublisher(Node):
             forces = []
             contact_states = []
             for i in range(4):
-                a0 = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[i]\
-                    .dynamics_data.continuous_data.xdot[self.nv:]
-                a0[6:] = self.mpc_block.mpc.us[i][self.force_dim:]
-                accs.append(a0)
+                a = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[i].dynamics_data.continuous_data.xdot[self.nv:]
+                a[6:] = self.mpc_block.mpc.us[i][self.force_dim:]
+                accs.append(a)
                 forces.append(self.mpc_block.mpc.us[i][:self.force_dim])
                 contact_states.append(self.mpc_block.mpc.getTrajOptProblem().stages[i].dynamics.differential_dynamics.contact_states)
-            
-            self.traj_msg.a0 = listof_numpy_to_multiarray_float64(accs)
+
+            self.traj_msg.ddqs = listof_numpy_to_multiarray_float64(accs)
             self.traj_msg.forces = listof_numpy_to_multiarray_float64(forces)
             self.traj_msg.contact_states = listof_numpy_to_multiarray_int8(contact_states)
 

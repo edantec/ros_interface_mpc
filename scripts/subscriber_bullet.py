@@ -182,7 +182,7 @@ class MpcSubscriber(Node):
         self.xs = multiarray_to_numpy(msg.xs)
         self.K0 = multiarray_to_numpy(msg.k0)
         self.trajectoryStamp = Time.from_msg(msg.stamp)
-        self.a0 = multiarray_to_numpy(msg.a0)
+        self.ddqs = multiarray_to_numpy(msg.ddqs)
         self.contact_states = multiarray_to_numpy(msg.contact_states)
         self.forces = multiarray_to_numpy(msg.forces)
 
@@ -222,7 +222,6 @@ class MpcSubscriber(Node):
     def control_loop(self,t, q, v, a):
         delay = t - self.trajectoryStamp.nanoseconds * 1e-9
         x_measured = np.concatenate((self.base_pose, q, self.base_vel, v))
-        #self.get_logger().info(f"Delay : {delay}")
 
         if self.start_mpc:
             self.Kp = [10.]*self.nu
@@ -235,19 +234,22 @@ class MpcSubscriber(Node):
                 step_progress = 0.0
                 x_interpolated = self.xs[step_nb]
                 u_interpolated = self.us[step_nb]
-                a_interpolated = self.a0[step_nb]
-                forces_interpolated = self.forces[step_nb]
             else:
                 x_interpolated = self.xs[step_nb + 1] * step_progress  + self.xs[step_nb] * (1. - step_progress)
                 u_interpolated = self.us[step_nb + 1] * step_progress  + self.us[step_nb] * (1. - step_progress)
-                a_interpolated = self.a0[step_nb + 1] * step_progress  + self.a0[step_nb] * (1. - step_progress)
-                forces_interpolated = self.forces[step_nb + 1] * step_progress  + self.forces[step_nb] * (1. - step_progress)
-            
+
             self.jointCommand = x_interpolated[7:self.nq]
             self.velocityCommand = x_interpolated[self.nq + 6:]
             if self.parameter.value == "fulldynamics":
                 self.torqueCommand = u_interpolated - 1.0 * self.K0 @ self.space.difference(x_measured, x_interpolated)
+
             elif self.parameter.value == "kinodynamics":
+                if(step_nb >= len(self.xs) -1):
+                    a_interpolated = self.ddqs[step_nb]
+                    forces_interpolated = self.forces[step_nb]
+                else:
+                    a_interpolated = self.ddqs[step_nb + 1] * step_progress  + self.ddqs[step_nb] * (1. - step_progress)
+                    forces_interpolated = self.forces[step_nb + 1] * step_progress  + self.forces[step_nb] * (1. - step_progress)
                 self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
                 self.qp.solve_qp(
                     self.handler.getData(),
@@ -258,7 +260,6 @@ class MpcSubscriber(Node):
                     self.handler.getMassMatrix(),
                 )
                 self.torqueCommand = self.qp.solved_torque
-                #self.get_logger().info(f"torque : {self.torqueCommand}")
 
 
         if (self.robotIf.is_ready):

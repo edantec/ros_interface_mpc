@@ -6,9 +6,9 @@ std_msgs/Float64MultiArray us
 std_msgs/Float64MultiArray k0
 
 # For kinodynamics
-bool[] contact_states
-float64[] forces
-float64[] a0
+std_msgs/Int8MultiArray contact_states
+std_msgs/Float64MultiArray forces
+std_msgs/Float64MultiArray ddqs
 
 # For debugging/logging purpose
 float64 process_duration
