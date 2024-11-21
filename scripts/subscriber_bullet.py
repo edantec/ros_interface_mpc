@@ -19,7 +19,7 @@ from rclpy.node import Node
 import numpy as np
 import rclpy.time
 
-from ros_interface_mpc.msg import Torque, State
+from ros_interface_mpc.msg import Trajectory, InitialState
 from rclpy.qos import QoSProfile
 from rclpy.time import Time
 from ros_interface_mpc_utils.conversions import multiarray_to_numpy
@@ -86,12 +86,12 @@ class MpcSubscriber(Node):
 
         # Define state publisher
         qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
-        self.robot_pub = self.create_publisher(State, 'robot_states', qos_profile_keeplast)
+        self.robot_pub = self.create_publisher(InitialState, 'initial_state', qos_profile_keeplast)
 
         # Define command subscriber
         self.subscription_joints = self.create_subscription(
-            Torque,
-            'command',
+            Trajectory,
+            'trajectory',
             self.trajectory_callback,
             qos_profile_keeplast)
 
@@ -269,10 +269,9 @@ class MpcSubscriber(Node):
                                     self.Kd #self.Kd.tolist()
             )
 
-            state = State()
+            state = InitialState()
             state.stamp = rclpy.time.Time(seconds=t).to_msg()
-            state.qc = x_measured[:self.nq].tolist()
-            state.vc = x_measured[self.nq:].tolist()
+            state.x0 = x_measured.tolist()
             self.robot_pub.publish(state)
 
         ############################

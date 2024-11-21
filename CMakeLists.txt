@@ -30,10 +30,9 @@ find_package(rosidl_default_generators REQUIRED)
 ament_python_install_package(${PROJECT_NAME}_utils)
 
 set(msg_files
-  "msg/State.msg"
-  "msg/Torque.msg"
+  "msg/InitialState.msg"
+  "msg/Trajectory.msg"
   "msg/RobotState.msg"
-  "msg/InputMessage.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

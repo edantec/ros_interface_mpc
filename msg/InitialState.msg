@@ -1,3 +1,2 @@
 builtin_interfaces/Time stamp
-float64[] qc
-float64[] vc
+float64[] x0

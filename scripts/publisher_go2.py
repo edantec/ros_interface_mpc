@@ -17,10 +17,9 @@
 import rclpy
 from rclpy.node import Node
 
-from ros_interface_mpc.msg import Torque, State
+from ros_interface_mpc.msg import Trajectory, InitialState
 from sensor_msgs.msg import Joy
 from rclpy.qos import QoSProfile
-from rclpy.time import Time
 
 import numpy as np
 from ros_interface_mpc_utils.conversions import (
@@ -42,7 +41,9 @@ class MpcPublisher(Node):
 
         qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
 
-        self.publisher_ = self.create_publisher(Torque, 'command', qos_profile_keeplast)
+        self.traj_publisher_ = self.create_publisher(Trajectory, 'trajectory', qos_profile_keeplast)
+        self.traj_msg = Trajectory()
+
 
         self.mpc_block = ControlBlockGo2(self.mpc_type, motion_type, n_threads)
         self.mpc_block.create_gait()
@@ -58,8 +59,8 @@ class MpcPublisher(Node):
         self.timeToWalk = 0
 
         self.state_subscription = self.create_subscription(
-            State,
-            'robot_states',
+            InitialState,
+            'initial_state',
             self.listener_callback,
             qos_profile_keeplast)
 
@@ -70,8 +71,7 @@ class MpcPublisher(Node):
             qos_profile_keeplast)
 
     def listener_callback(self, msg):
-        self.solve(msg.stamp, np.array(msg.qc + msg.vc))
-        #self.get_logger().info('I heard: "%s"' % msg.position[0])
+        self.solve(msg.stamp, np.array(msg.x0))
 
     def listener_callback_input(self, msg):
         self.commanded_vel[0] = msg.axes[1] * 0.25#m/s
@@ -94,15 +94,12 @@ class MpcPublisher(Node):
         else:
             self.mpc_block.mpc.switchToStand()
 
-        msg = Torque()
-        msg.stamp = stamp
+        self.traj_msg.stamp = stamp
         self.mpc_block.update_mpc(x0)
-        msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:4])
-        msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:4])
+        self.traj_msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:4])
+        self.traj_msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:4])
         if self.mpc_type == "fulldynamics":
-            msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
-            msg.ndx = self.ndx
-            msg.nu = self.nu
+            self.traj_msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
         elif self.mpc_type == "kinodynamics":
             accs = []
             forces = []
@@ -115,14 +112,13 @@ class MpcPublisher(Node):
                 forces.append(self.mpc_block.mpc.us[i][:self.force_dim])
                 contact_states.append(self.mpc_block.mpc.getTrajOptProblem().stages[i].dynamics.differential_dynamics.contact_states)
             
-            msg.a0 = listof_numpy_to_multiarray_float64(accs)
-            msg.forces = listof_numpy_to_multiarray_float64(forces)
-            msg.contact_states = listof_numpy_to_multiarray_int8(contact_states)
+            self.traj_msg.a0 = listof_numpy_to_multiarray_float64(accs)
+            self.traj_msg.forces = listof_numpy_to_multiarray_float64(forces)
+            self.traj_msg.contact_states = listof_numpy_to_multiarray_int8(contact_states)
 
         duration = self.get_clock().now() - start_time
-        msg.process_duration = duration.nanoseconds * 1e-9
-        self.publisher_.publish(msg)
-        #self.get_logger().info('Publishing: "%s"' % msg.x0[0])
+        self.traj_msg.process_duration = duration.nanoseconds * 1e-9
+        self.traj_publisher_.publish(self.traj_msg)
 
 
 def main(args=None):
