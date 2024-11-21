@@ -182,7 +182,7 @@ class Go2Parameters():
 
 
 class ControlBlockGo2():
-    def __init__(self, mpc_type, motion):
+    def __init__(self, mpc_type, motion, num_threads):
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
@@ -207,7 +207,7 @@ class ControlBlockGo2():
             TOL=1e-4,
             mu_init=1e-8,
             max_iters=1,
-            num_threads=8,
+            num_threads=num_threads,
             swing_apex=0.2,
             T_fly=self.T_fly,
             T_contact=self.T_contact,

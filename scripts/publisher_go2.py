@@ -32,17 +32,17 @@ class MpcPublisher(Node):
 
     def __init__(self):
         super().__init__('mpc_publisher')
-        self.declare_parameter('mpc_type')
-        self.declare_parameter('motion_type')
-        self.parameter = self.get_parameter('mpc_type')
-        self.motion = self.get_parameter('motion_type')
+        self.mpc_type = self.declare_parameter('mpc_type').value
+        self.motion_type = self.declare_parameter('motion_type').value
+        self.n_threads = self.declare_parameter('n_threads').value
+
         qos_profile = QoSProfile(depth=10)
 
         self.publisher_ = self.create_publisher(Torque, 'command', qos_profile)
         timer_period = 0.01  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
-        self.mpc_block = ControlBlockGo2(self.parameter.value, self.motion.value)
+        self.mpc_block = ControlBlockGo2(self.mpc_type, self.motion_type, self.n_threads)
         self.mpc_block.create_gait()
         self.mpc_block.mpc.switchToStand()
 
@@ -104,11 +104,11 @@ class MpcPublisher(Node):
         self.mpc_block.update_mpc(self.x0)
         msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:3])
         msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:3])
-        if self.parameter.value == "fulldynamics":
+        if self.mpc_type == "fulldynamics":
             msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
             msg.ndx = self.ndx
             msg.nu = self.nu
-        elif self.parameter.value == "kinodynamics":
+        elif self.mpc_type == "kinodynamics":
             a0 = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[0]\
                 .dynamics_data.continuous_data.xdot[self.nv:]
             a0[6:] = self.mpc_block.mpc.us[0][self.force_dim:]
