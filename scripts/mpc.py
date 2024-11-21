@@ -1,7 +1,7 @@
 """
-This script launches a locomotion MPC scheme which solves repeatedly an 
-optimal control problem based on the full dynamics model of the humanoid robot Talos. 
-The contacts forces are modeled as 6D wrenches. 
+This script launches a locomotion MPC scheme which solves repeatedly an
+optimal control problem based on the full dynamics model of the humanoid robot Talos.
+The contacts forces are modeled as 6D wrenches.
 """
 
 import numpy as np
@@ -11,7 +11,7 @@ from simple_mpc import RobotHandler, FullDynamicsProblem, KinodynamicsProblem, M
 class Go2Parameters():
     def __init__(self, mpc_type):
         print(mpc_type)
-        
+
         SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
         URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
         modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
@@ -63,7 +63,7 @@ class Go2Parameters():
 
             # Weight for leg position (hip, thigh, ankle)
             w_legpos = [1., 1., 1.]
-           
+
             # Weight for base linear and angular velocity
             w_basevel = [10., 10., 10., 1., 1., 10.]
 
@@ -80,12 +80,12 @@ class Go2Parameters():
 
             # Weight for force regularization (reference is robot weight divided by nb of contacts)
             w_forces_lin = np.array([0.0002, 0.0002, 0.0002])
-            
+
             # Weight for feet position tracking
             w_foot_tracking = 5000
 
             nu = self.handler.getModel().nv - 6
-        
+
             self.problem_conf = dict(
                 DT=0.01,
                 w_x=np.diag(w_x),
@@ -112,13 +112,13 @@ class Go2Parameters():
 
              # Weight for leg position (hip, thigh, ankle)
             w_legpos = [1, 1, 1]
-            
+
             # Weight for base linear and angular velocity
             w_basevel = [10, 10, 10, 10, 10, 10]
 
             # Weight for leg velocity (hip, thigh, ankle)
             w_legvel = [0.1, 0.1, 0.1]
-            
+
             # Concatenated weight for state regularization
             w_x = np.diag(np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4))
 
@@ -135,7 +135,7 @@ class Go2Parameters():
                     np.ones(self.handler.getModel().nv - 6) * 1e-4,
                 )
             ))
-            
+
             # Weight for feet position tracking
             w_foot_tracking = 3000
 
@@ -187,14 +187,14 @@ class ControlBlockGo2():
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
         self.T = 40
-        
+
         if mpc_type == "fulldynamics":
             problem = FullDynamicsProblem(self.param.handler)
         elif mpc_type == "kinodynamics":
             problem = KinodynamicsProblem(self.param.handler)
         problem.initialize(self.param.problem_conf)
         problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
-        
+
         if self.motion == "walk":
             self.T_fly = 20
             self.T_contact = 10
@@ -218,7 +218,7 @@ class ControlBlockGo2():
         self.mpc = MPC()
         self.mpc.initialize(mpc_conf, problem)
         self.nq = self.param.handler.getModel().nq
-    
+
     def create_gait(self):
         """ Define contact sequence throughout horizon"""
         contact_phase_quadru = {
@@ -254,7 +254,7 @@ class ControlBlockGo2():
         elif self.motion == "jump":
             contact_phases = [contact_phase_quadru] * self.T_contact
             contact_phases += [contact_phase_lift_all] * self.T_fly
-            contact_phases += [contact_phase_quadru] * self.T_contact 
+            contact_phases += [contact_phase_quadru] * self.T_contact
 
         self.mpc.generateCycleHorizon(contact_phases)
 
