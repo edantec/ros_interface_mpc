@@ -37,16 +37,14 @@ class MpcPublisher(Node):
     def __init__(self):
         super().__init__('mpc_publisher')
         self.mpc_type = self.declare_parameter('mpc_type').value
-        self.motion_type = self.declare_parameter('motion_type').value
-        self.n_threads = self.declare_parameter('n_threads').value
+        motion_type = self.declare_parameter('motion_type').value
+        n_threads = self.declare_parameter('n_threads').value
 
-        qos_profile = QoSProfile(depth=10)
+        qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
 
-        self.publisher_ = self.create_publisher(Torque, 'command', qos_profile)
-        timer_period = 0.01  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.publisher_ = self.create_publisher(Torque, 'command', qos_profile_keeplast)
 
-        self.mpc_block = ControlBlockGo2(self.mpc_type, self.motion_type, self.n_threads)
+        self.mpc_block = ControlBlockGo2(self.mpc_type, motion_type, n_threads)
         self.mpc_block.create_gait()
         self.mpc_block.mpc.switchToStand()
 
@@ -54,32 +52,25 @@ class MpcPublisher(Node):
         self.ndx = self.mpc_block.param.handler.getModel().nv * 2
         self.nu = self.mpc_block.param.handler.getModel().nv - 6
         self.nv = self.mpc_block.param.handler.getModel().nv
-        self.x0 = self.mpc_block.param.handler.getState()
-        self.position = np.zeros(self.nu)
-        self.velocity = np.zeros(self.nu)
-        self.base_pos = np.zeros(7)
-        self.base_vel = np.zeros(6)
 
         self.commanded_vel = np.zeros(6)
         self.walking = False
-        self.stamp = Time.to_msg(self.get_clock().now())
         self.timeToWalk = 0
 
         self.state_subscription = self.create_subscription(
             State,
             'robot_states',
             self.listener_callback,
-            1)
+            qos_profile_keeplast)
 
         self.joystick_subsciption = self.create_subscription(
             Joy,
             'input',
             self.listener_callback_input,
-            1)
+            qos_profile_keeplast)
 
     def listener_callback(self, msg):
-        self.stamp = msg.stamp
-        self.x0 = np.array(msg.qc + msg.vc)
+        self.solve(msg.stamp, np.array(msg.qc + msg.vc))
         #self.get_logger().info('I heard: "%s"' % msg.position[0])
 
     def listener_callback_input(self, msg):
@@ -94,7 +85,7 @@ class MpcPublisher(Node):
             self.get_logger().info('Stand mode')
             self.walking = False
 
-    def timer_callback(self):
+    def solve(self, stamp, x0):
         start_time = self.get_clock().now()
 
         self.timeToWalk += 1
@@ -104,8 +95,8 @@ class MpcPublisher(Node):
             self.mpc_block.mpc.switchToStand()
 
         msg = Torque()
-        msg.stamp = self.stamp
-        self.mpc_block.update_mpc(self.x0)
+        msg.stamp = stamp
+        self.mpc_block.update_mpc(x0)
         msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:4])
         msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:4])
         if self.mpc_type == "fulldynamics":
@@ -141,9 +132,6 @@ def main(args=None):
 
     rclpy.spin(mpc_publisher)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     mpc_publisher.destroy_node()
     rclpy.shutdown()
 

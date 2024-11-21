@@ -85,22 +85,22 @@ class MpcSubscriber(Node):
         self.handler.initialize(design_conf)
 
         # Define state publisher
-        qos_profile = QoSProfile(depth=10)
-        self.robot_pub = self.create_publisher(State, 'robot_states', qos_profile)
+        qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
+        self.robot_pub = self.create_publisher(State, 'robot_states', qos_profile_keeplast)
 
         # Define command subscriber
         self.subscription_joints = self.create_subscription(
             Torque,
             'command',
-            self.joint_state_callback,
-            qos_profile)
+            self.trajectory_callback,
+            qos_profile_keeplast)
 
         # Define odometry subscriber
         self.subscription_odom = self.create_subscription(
             Odometry,
             'odometry/filtered',
             self.odometry_callback,
-            1)
+            qos_profile_keeplast)
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
@@ -151,8 +151,11 @@ class MpcSubscriber(Node):
 
         # Debugging purposes
         self.debug_filter_pub = self.create_publisher(Float64MultiArray, "/debug/filtered_state", 10)
-        self.debug_timing_pub = self.create_publisher(Float64, "/debug/loop_time", 10)
-        self.debug_timing_msg = Float64()
+        self.debug_loop_time_pub = self.create_publisher(Float64, "/debug/loop_time", 10)
+        self.debug_loop_time_msg = Float64()
+        self.debug_comm_time_pub = self.create_publisher(Float64, "/debug/comm_time", 10)
+        self.debug_comm_time_msg = Float64()
+        self.debug_comm_time_new_msg = False
 
         """ Initialize whole-body inverse dynamics QP"""
         id_conf = dict(
@@ -174,7 +177,7 @@ class MpcSubscriber(Node):
         self.robotIf.start_async(self.default_standing_q[7:].tolist())
         self.robotIf.register_callback(self.control_loop)
 
-    def joint_state_callback(self, msg):
+    def trajectory_callback(self, msg):
         self.us = multiarray_to_numpy(msg.us)
         self.xs = multiarray_to_numpy(msg.xs)
         self.K0 = multiarray_to_numpy(msg.k0)
@@ -184,6 +187,8 @@ class MpcSubscriber(Node):
         self.forces = multiarray_to_numpy(msg.forces)
 
         self.start_mpc = True
+        self.debug_comm_time_new_msg = True
+        self.debug_comm_time_process_time = msg.process_duration
 
     def odometry_callback(self, msg):
         t_meas = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
@@ -255,9 +260,6 @@ class MpcSubscriber(Node):
                 self.torqueCommand = self.qp.solved_torque
                 #self.get_logger().info(f"torque : {self.torqueCommand}")
 
-        debug_msg = Float64MultiArray()
-        debug_msg.data = x_measured.ravel().tolist()
-        self.debug_filter_pub.publish(debug_msg)
 
         if (self.robotIf.is_ready):
             self.robotIf.send_command(self.jointCommand.tolist(),
@@ -273,9 +275,24 @@ class MpcSubscriber(Node):
             state.vc = x_measured[self.nq:].tolist()
             self.robot_pub.publish(state)
 
-        # Log delay
-        self.debug_timing_msg.data = delay
-        self.debug_timing_pub.publish(self.debug_timing_msg)
+        ############################
+        # Un-comment for debugging #
+        ############################
+
+        # # Log delay
+        # self.debug_loop_time_msg.data = delay
+        # self.debug_loop_time_pub.publish(self.debug_loop_time_msg)
+
+        # # Log filtered state
+        # debug_msg = Float64MultiArray()
+        # debug_msg.data = x_measured.ravel().tolist()
+        # self.debug_filter_pub.publish(debug_msg)
+
+        # Log communication time
+        if(self.debug_comm_time_new_msg):
+            self.debug_comm_time_new_msg = False
+            self.debug_comm_time_msg.data = delay - self.debug_comm_time_process_time
+            self.debug_comm_time_pub.publish(self.debug_comm_time_msg)
 
 def main(args=None):
     rclpy.init(args=args)
