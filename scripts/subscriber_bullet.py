@@ -244,6 +244,8 @@ class MpcSubscriber(Node):
                 self.torqueCommand = u_interpolated - 1.0 * self.K0 @ self.space.difference(x_measured, x_interpolated)
 
             elif self.parameter.value == "kinodynamics":
+                self.Kp = [50.]*self.nu
+                self.Kd = (np.sqrt(self.Kp)).tolist()
                 if(step_nb >= len(self.xs) -1):
                     a_interpolated = self.ddqs[step_nb]
                     forces_interpolated = self.forces[step_nb]

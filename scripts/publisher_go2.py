@@ -75,8 +75,8 @@ class MpcPublisher(Node):
 
     def listener_callback_input(self, msg):
         self.commanded_vel[0] = msg.axes[1] * 0.25#m/s
-        self.commanded_vel[1] = msg.axes[0] * 0.25 #m/s
-        self.commanded_vel[5] = msg.axes[2] * 0.15
+        self.commanded_vel[1] = msg.axes[0] * 0.25#m/s
+        self.commanded_vel[5] = msg.axes[2] * 0.75
 
         if msg.buttons[1]: # Toggle only at first press
             self.get_logger().info('Walk mode')
