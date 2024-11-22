@@ -28,6 +28,9 @@ from ros_interface_mpc_utils.conversions import (
     listof_numpy_to_multiarray_int8
 )
 
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from scipy.spatial.transform import Rotation
 from mpc import ControlBlockGo2
 
 
@@ -64,6 +67,9 @@ class MpcPublisher(Node):
             self.listener_callback,
             qos_profile_keeplast)
 
+        # For joystick input
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         self.joystick_subsciption = self.create_subscription(
             Joy,
             'input',
@@ -74,9 +80,16 @@ class MpcPublisher(Node):
         self.solve(msg.stamp, np.array(msg.x0))
 
     def listener_callback_input(self, msg):
-        self.commanded_vel[0] = msg.axes[1] * 0.25#m/s
-        self.commanded_vel[1] = msg.axes[0] * 0.25#m/s
-        self.commanded_vel[5] = msg.axes[2] * 0.75
+        transform = self.tf_buffer.lookup_transform("base", "odom", rclpy.time.Time())
+        quat = [transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z, transform.transform.rotation.w]
+        theta = Rotation(quat).as_euler("zyx", degrees=False)[0]
+        self.commanded_vel[0] = np.cos(theta) * msg.axes[1] + np.sin(theta) * msg.axes[0]
+        self.commanded_vel[1] = - np.sin(theta) * msg.axes[1] + np.cos(theta) * msg.axes[0]
+        self.commanded_vel[5] = msg.axes[2]
+
+        self.commanded_vel[0] *= 0.25 #m/s
+        self.commanded_vel[1] *= 0.25 #m/s
+        self.commanded_vel[5] *= 0.75
 
         if msg.buttons[1]: # Toggle only at first press
             self.get_logger().info('Walk mode')
