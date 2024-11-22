@@ -80,6 +80,12 @@ class MpcSubscriber(Node):
                 "RL_thigh",
                 "RR_thigh",
             ],
+            feet_to_base_trans=[
+                np.array([0.2, 0.1, 0.]),
+                np.array([0.2, -0.1, 0.]),
+                np.array([-0.2, 0.1, 0.]),
+                np.array([-0.2, -0.1, 0.]),
+            ]
         )
         self.handler = RobotHandler()
         self.handler.initialize(design_conf)
