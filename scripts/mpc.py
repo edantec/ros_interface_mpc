@@ -19,7 +19,7 @@ class Go2Parameters():
             urdf_path=modelPath + URDF_SUBPATH,
             srdf_path=modelPath + SRDF_SUBPATH,
             robot_description="",
-            root_name="root_joint",
+            root_name="base",
             base_configuration="standing",
             controlled_joints_names=[
                 "root_joint",
@@ -49,10 +49,10 @@ class Go2Parameters():
                 "RR_thigh",
             ],
             feet_to_base_trans=[
-                np.array([0.2, 0.1, 0.]),
-                np.array([0.2, -0.1, 0.]),
-                np.array([-0.2, 0.1, 0.]),
-                np.array([-0.2, -0.1, 0.]),
+                np.array([0.2, 0.15, 0.]),
+                np.array([0.2, -0.15, 0.]),
+                np.array([-0.2, 0.15, 0.]),
+                np.array([-0.2, -0.15, 0.]),
             ]
         )
         self.handler = RobotHandler()
