@@ -49,10 +49,10 @@ class Go2Parameters():
                 "RR_thigh",
             ],
             feet_to_base_trans=[
-                np.array([0.2, 0.15, 0.]),
-                np.array([0.2, -0.15, 0.]),
-                np.array([-0.2, 0.15, 0.]),
-                np.array([-0.2, -0.15, 0.]),
+                np.array([0.2, 0.17, 0.]),
+                np.array([0.2, -0.17, 0.]),
+                np.array([-0.2, 0.17, 0.]),
+                np.array([-0.2, -0.17, 0.]),
             ]
         )
         self.handler = RobotHandler()
@@ -192,7 +192,7 @@ class ControlBlockGo2():
         print(mpc_type)
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
-        self.T = 60
+        self.T = 50
 
         if mpc_type == "fulldynamics":
             problem = FullDynamicsProblem(self.param.handler)
@@ -203,7 +203,7 @@ class ControlBlockGo2():
 
         if self.motion == "walk":
             self.T_fly = 20
-            self.T_contact = 10
+            self.T_contact = 5
         elif self.motion == "jump":
             self.T_fly = 20
             self.T_contact = 100
