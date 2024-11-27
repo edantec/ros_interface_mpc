@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 
-# Copyright 2016 Open Source Robotics Foundation, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import rclpy
 from rclpy.node import Node
 import numpy as np
@@ -28,25 +14,27 @@ from ros_interface_mpc_utils.conversions import multiarray_to_numpy
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64MultiArray, Float64
 
-from robot_utils import loadGo2
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
 from simple_mpc import IDSolver, RobotHandler
 import example_robot_data
 
-class MpcSubscriber(Node):
+class InterpolatorControllerNode(Node):
 
     def __init__(self):
         # Initialization of node
-        super().__init__('mpc_subscriber')
+        super().__init__('interpolator_controller')
         self.declare_parameter('mpc_type')
         self.parameter = self.get_parameter('mpc_type')
         self.robotIf = Go2RobotInterface(self)
         self.start_mpc = False
 
+        # Load robot
+        self.rmodel = example_robot_data.load("go2").model
         SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
         URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
         modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
+
         design_conf = dict(
             urdf_path=modelPath + URDF_SUBPATH,
             srdf_path=modelPath + SRDF_SUBPATH,
@@ -110,9 +98,6 @@ class MpcSubscriber(Node):
 
         # Message declarations for torque
         self.torque_simu = np.zeros(18)
-
-        # Load the robot model
-        self.rmodel, geom_model = loadGo2()
 
         self.space = manifolds.MultibodyPhaseSpace(self.rmodel)
         self.ndx = 36
@@ -297,15 +282,15 @@ class MpcSubscriber(Node):
         # self.debug_filter_pub.publish(debug_msg)
 
         # Log communication time
-        if(self.debug_comm_time_new_msg):
-            self.debug_comm_time_new_msg = False
-            self.debug_comm_time_msg.data = delay - self.debug_comm_time_process_time
-            self.debug_comm_time_pub.publish(self.debug_comm_time_msg)
+        # if(self.debug_comm_time_new_msg):
+        #     self.debug_comm_time_new_msg = False
+        #     self.debug_comm_time_msg.data = delay - self.debug_comm_time_process_time
+        #     self.debug_comm_time_pub.publish(self.debug_comm_time_msg)
 
 def main(args=None):
     rclpy.init(args=args)
 
-    mpc_subscriber = MpcSubscriber()
+    mpc_subscriber = InterpolatorControllerNode()
     rclpy.spin(mpc_subscriber)
 
     mpc_subscriber.destroy_node()

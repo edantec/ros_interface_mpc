@@ -34,10 +34,10 @@ from scipy.spatial.transform import Rotation
 from mpc import ControlBlockGo2
 
 
-class MpcPublisher(Node):
+class OCPSolverNode(Node):
 
     def __init__(self):
-        super().__init__('mpc_publisher')
+        super().__init__('ocp_solver')
         self.mpc_type = self.declare_parameter('mpc_type').value
         motion_type = self.declare_parameter('motion_type').value
         n_threads = self.declare_parameter('n_threads').value
@@ -136,7 +136,7 @@ class MpcPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    mpc_publisher = MpcPublisher()
+    mpc_publisher = OCPSolverNode()
 
     rclpy.spin(mpc_publisher)
 

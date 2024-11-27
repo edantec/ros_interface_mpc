@@ -30,10 +30,9 @@ ament_python_install_package(${PROJECT_NAME}_utils)
 
 # Install Python executables
 install(PROGRAMS
-  scripts/publisher_go2.py
-  scripts/subscriber_bullet.py
+  scripts/ocp_solver.py
+  scripts/interpolator_controller.py
   scripts/mpc.py
-  scripts/robot_utils.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
