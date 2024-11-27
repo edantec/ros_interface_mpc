@@ -7,31 +7,17 @@
   <maintainer email="ewen.dantec@inria.fr">edantec</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  
-  <depend>rclcpp</depend>
-  <depend>simple-mpc</depend>
-  <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
-  <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <depend>builtin_interfaces</depend>
-  <depend>tf2</depend>
-  
-  <build_depend>cmake_modules</build_depend>
-  <exec_depend>rosidl_default_runtime</exec_depend>
-  <exec_depend>joint_state_publisher</exec_depend>
-  <exec_depend>robot_state_publisher</exec_depend>
-  <exec_depend>rviz</exec_depend>
-  <exec_depend>xacro</exec_depend>
-  <member_of_group>rosidl_interface_packages</member_of_group>
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>simple-mpc</exec_depend>
+  <exec_depend>example-robot-data</exec_depend>
 
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
