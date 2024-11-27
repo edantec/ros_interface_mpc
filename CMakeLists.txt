@@ -1,6 +1,4 @@
 cmake_minimum_required(VERSION 3.8)
-#cmake_policy(SET CMP0148 NEW)
-#cmake_policy(SET CMP0167 NEW)
 project(ros_interface_mpc)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -51,23 +49,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 # Install Python executables
 install(PROGRAMS
-  scripts/publisher_talos.py
   scripts/publisher_go2.py
-  scripts/subscriber_talos.py
   scripts/subscriber_bullet.py
-  scripts/bullet_robot.py
-  scripts/subscriber_go2.py
-  scripts/subscriber_test.py
   scripts/mpc.py
   scripts/robot_utils.py
-  scripts/simulation_args.py
-  scripts/simulation_utils.py
   DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY launch urdf meshes rviz
-  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
