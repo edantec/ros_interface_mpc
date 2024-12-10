@@ -159,11 +159,11 @@ class InterpolatorControllerNode(Node):
             kd=0,
             w_force=100,
             w_acc=1,
+            w_tau=0,
             verbose=False,
         )
 
-        self.qp = IDSolver()
-        self.qp.initialize(id_conf, self.rmodel)
+        self.qp = IDSolver(id_conf, self.rmodel)
 
         self.robotIf.start_async(self.default_standing_q[7:].tolist())
         self.robotIf.register_callback(self.control_loop)

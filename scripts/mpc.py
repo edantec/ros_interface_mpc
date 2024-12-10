@@ -6,7 +6,7 @@ The contacts forces are modeled as 6D wrenches.
 
 import numpy as np
 import example_robot_data
-from simple_mpc import RobotHandler, FullDynamicsProblem, KinodynamicsProblem, MPC
+from simple_mpc import RobotHandler, FullDynamicsOCP, KinodynamicsOCP, MPC
 
 class Go2Parameters():
     def __init__(self, mpc_type):
@@ -93,7 +93,7 @@ class Go2Parameters():
             nu = self.handler.getModel().nv - 6
 
             self.problem_conf = dict(
-                DT=0.01,
+                timestep=0.01,
                 w_x=np.diag(w_x),
                 w_u=np.eye(nu) * 1e-4, # Weight for torque regularization
                 w_cent=np.diag(np.concatenate((w_cent_lin, w_cent_ang))),
@@ -101,8 +101,8 @@ class Go2Parameters():
                 force_size=3,
                 w_forces=np.diag(w_forces_lin),
                 w_frame=np.eye(3) * w_foot_tracking,
-                umin=-self.handler.getModel().effortLimit[6:],
-                umax=self.handler.getModel().effortLimit[6:],
+                umin=self.handler.getModel().lowerEffortLimit[6:],
+                umax=self.handler.getModel().upperEffortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
                 mu=0.8,
@@ -164,7 +164,7 @@ class Go2Parameters():
             w_centder = np.diag(np.concatenate((w_centder_lin, w_centder_ang)))
 
             self.problem_conf = dict(
-                DT=0.01,
+                timestep=0.01,
                 w_x=w_x,
                 w_u=w_u,
                 w_cent=w_cent,
@@ -172,8 +172,6 @@ class Go2Parameters():
                 gravity=gravity,
                 force_size=3,
                 w_frame=np.eye(3) * w_foot_tracking,
-                umin=-self.handler.getModel().effortLimit[6:],
-                umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
                 mu=0.8,
@@ -195,11 +193,10 @@ class ControlBlockGo2():
         self.T = 50
 
         if mpc_type == "fulldynamics":
-            problem = FullDynamicsProblem(self.param.handler)
+            problem = FullDynamicsOCP(self.param.problem_conf, self.param.handler)
         elif mpc_type == "kinodynamics":
-            problem = KinodynamicsProblem(self.param.handler)
-        problem.initialize(self.param.problem_conf)
-        problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2])
+            problem = KinodynamicsOCP(self.param.problem_conf, self.param.handler)
+        problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2], False)
 
         if self.motion == "walk":
             self.T_fly = 20
@@ -217,8 +214,7 @@ class ControlBlockGo2():
             swing_apex=0.2,
             T_fly=self.T_fly,
             T_contact=self.T_contact,
-            T=self.T,
-            dt=0.01,
+            timestep=0.01,
         )
 
         self.mpc = MPC()
