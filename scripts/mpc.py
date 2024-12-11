@@ -105,6 +105,8 @@ class Go2Parameters():
                 umax=self.handler.getModel().upperEffortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
+                Kp_correction=np.array([0, 0, 0]),
+                Kd_correction=np.array([0, 0, 0]),
                 mu=0.8,
                 Lfoot=0.01,
                 Wfoot=0.01,

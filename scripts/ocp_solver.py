@@ -112,7 +112,7 @@ class OCPSolverNode(Node):
         self.traj_msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:4])
         self.traj_msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:4])
         if self.mpc_type == "fulldynamics":
-            self.traj_msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.K0)
+            self.traj_msg.k0 = numpy_to_multiarray_float64(self.mpc_block.mpc.Ks[0])
         elif self.mpc_type == "kinodynamics":
             accs = []
             forces = []

@@ -164,7 +164,6 @@ class InterpolatorControllerNode(Node):
         )
 
         self.qp = IDSolver(id_conf, self.rmodel)
-
         self.robotIf.start_async(self.default_standing_q[7:].tolist())
         self.robotIf.register_callback(self.control_loop)
 
@@ -244,11 +243,12 @@ class InterpolatorControllerNode(Node):
                     a_interpolated = self.ddqs[step_nb + 1] * step_progress  + self.ddqs[step_nb] * (1. - step_progress)
                     forces_interpolated = self.forces[step_nb + 1] * step_progress  + self.forces[step_nb] * (1. - step_progress)
                 self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
-                self.qp.solve_qp(
+                self.qp.solveQP(
                     self.handler.getData(),
                     [bool(self.contact_states[step_nb][i]) for i in range(4)],
                     x_measured[self.nq:],
                     a_interpolated,
+                    np.zeros(self.nu),
                     forces_interpolated,
                     self.handler.getMassMatrix(),
                 )
@@ -262,7 +262,7 @@ class InterpolatorControllerNode(Node):
                                     self.Kp, #self.Kp.tolist(),
                                     self.Kd #self.Kd.tolist()
             )
-
+            
             state = InitialState()
             state.stamp = rclpy.time.Time(seconds=t).to_msg()
             state.x0 = x_measured.tolist()
