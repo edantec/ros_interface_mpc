@@ -12,18 +12,22 @@ class ControlBlock
 {
 public:
   ControlBlock(const std::string & mpc_type, const std::string motion_type, const int n_threads) {
+
+    /// Create the robot handler 
     pinocchio::Model model;
+    motion_type_ = motion_type;
     std::string urdf_path = EXAMPLE_ROBOT_DATA_MODEL_DIR "/go2_description/urdf/go2.urdf";
     std::string srdf_path = EXAMPLE_ROBOT_DATA_MODEL_DIR "/go2_description/srdf/go2.srdf";
     std::string base_joint_name ="root_joint";
-
+    
     pinocchio::urdf::buildModel(urdf_path, pinocchio::JointModelFreeFlyer(), model);
     pinocchio::srdf::loadReferenceConfigurations(model, srdf_path, false);
-    pinocchio::srdf::loadRotorParameters(model, srdf_path, false);
+    //pinocchio::srdf::loadRotorParameters(model, srdf_path, false);
 
     simple_mpc::RobotModelHandler model_handler = 
       simple_mpc::RobotModelHandler(model, "standing", base_joint_name);
     
+    /// Add reference foot for walking
     pinocchio::SE3 ref_FL_foot = pinocchio::SE3::Identity();
     pinocchio::SE3 ref_FR_foot = pinocchio::SE3::Identity();
     pinocchio::SE3 ref_RL_foot = pinocchio::SE3::Identity();
@@ -46,9 +50,9 @@ public:
     int ndx = nv * 2;
     Eigen::Vector3d gravity;
     gravity << 0., 0., -9.81;
-
+    
+    /// Create the optimal control problem object
     std::shared_ptr<simple_mpc::OCPHandler> ocpPtr;
-
     if (mpc_type == "fulldynamics") {
       simple_mpc::FullDynamicsSettings problem_settings;
 
@@ -85,12 +89,12 @@ public:
       problem_settings.qmax = model_handler.getModel().upperPositionLimit.tail(nu);
       problem_settings.mu = 0.8;
       problem_settings.Lfoot = 0.1;
-      problem_settings.Wfoot = 0.075;
+      problem_settings.Wfoot = 0.1;
       problem_settings.torque_limits = false;
       problem_settings.kinematics_limits = false;
       problem_settings.force_cone = false;
 
-      std::shared_ptr<simple_mpc::OCPHandler> ocpPtr = std::make_shared<simple_mpc::FullDynamicsOCP>(problem_settings, model_handler);
+      ocpPtr = std::make_shared<simple_mpc::FullDynamicsOCP>(problem_settings, model_handler);
     }
     if (mpc_type == "kinodynamics") {
       simple_mpc::KinodynamicsSettings problem_settings;
@@ -136,32 +140,37 @@ public:
       problem_settings.kinematics_limits = false;
       problem_settings.force_cone = false;
 
-      std::shared_ptr<simple_mpc::OCPHandler> ocpPtr = std::make_shared<simple_mpc::KinodynamicsOCP>(problem_settings, model_handler);
+      ocpPtr = std::make_shared<simple_mpc::KinodynamicsOCP>(problem_settings, model_handler);
     }
-    size_t T = 100;
+    size_t T = 50;
     ocpPtr->createProblem(model_handler.getReferenceState(), T, 3, gravity[2], false);
-
+    
+    /// Create the MPC object
     simple_mpc::MPCSettings mpc_settings;
-    std::size_t T_fly;
-    std::size_t T_contact;
-    if (motion_type == "walk") {
-      T_fly = 30;
-      T_contact = 5;
+    if (motion_type_ == "walk") {
+      T_fly_ = 30;
+      T_contact_ = 5;
     }
-    if (motion_type == "jump") {
-      T_fly = 20;
-      T_contact = 100;
+    if (motion_type_ == "jump") {
+      T_fly_ = 20;
+      T_contact_ = 100;
     }
+    mpc_settings.ddpIteration = 1;
     mpc_settings.support_force = -gravity[2] * model_handler.getMass();
     mpc_settings.TOL = 1e-4;
     mpc_settings.mu_init = 1e-8;
     mpc_settings.max_iters = 1;
     mpc_settings.num_threads = n_threads;
-    mpc_settings.T_fly = T_fly;
-    mpc_settings.T_contact = T_contact;
+    mpc_settings.swing_apex = 0.2;
+    mpc_settings.T_fly = T_fly_;
+    mpc_settings.T_contact = T_contact_;
+    mpc_settings.timestep = 0.01;
 
     mpc_ = std::make_shared<simple_mpc::MPC>(mpc_settings, ocpPtr);
+  }
 
+  void createGait() {
+    /// Create cycling horizon for walk or jump
     std::vector<std::map<std::string, bool>> contact_states;
     std::map<std::string, bool> contact_state_quadru;
     std::map<std::string, bool> contact_phase_lift_FL_RR;
@@ -187,30 +196,33 @@ public:
     contact_phase_lift_all.insert({"FR_foot", false});
     contact_phase_lift_all.insert({"RL_foot", false});
     contact_phase_lift_all.insert({"RR_foot", false});
-    // std::vector<std::vector<bool>> contact_states;
 
-    if (motion_type == "walk") {
-      for (std::size_t i = 0; i < T_contact; i++)
+    if (motion_type_ == "walk") {
+      for (std::size_t i = 0; i < T_contact_; i++)
         contact_states.push_back(contact_state_quadru);
-      for (std::size_t i = 0; i < T_fly; i++)
+      for (std::size_t i = 0; i < T_fly_; i++)
         contact_states.push_back(contact_phase_lift_FL_RR);
-      for (std::size_t i = 0; i < T_contact; i++)
+      for (std::size_t i = 0; i < T_contact_; i++)
         contact_states.push_back(contact_state_quadru);
-      for (std::size_t i = 0; i < T_fly; i++)
+      for (std::size_t i = 0; i < T_fly_; i++)
         contact_states.push_back(contact_phase_lift_RL_FR);
     }
-    if (motion_type == "jump") {
-      for (std::size_t i = 0; i < T_contact; i++)
+    if (motion_type_ == "jump") {
+      for (std::size_t i = 0; i < T_contact_; i++)
         contact_states.push_back(contact_state_quadru);
-      for (std::size_t i = 0; i < T_fly; i++)
+      for (std::size_t i = 0; i < T_fly_; i++)
         contact_states.push_back(contact_phase_lift_all);
-      for (std::size_t i = 0; i < T_contact; i++)
+      for (std::size_t i = 0; i < T_contact_; i++)
         contact_states.push_back(contact_state_quadru);
     }
 
     mpc_->generateCycleHorizon(contact_states);
   }
+
   virtual ~ControlBlock() {};
   
   std::shared_ptr<simple_mpc::MPC> mpc_;
+  std::string motion_type_;
+  std::size_t T_fly_;
+  std::size_t T_contact_;
 };

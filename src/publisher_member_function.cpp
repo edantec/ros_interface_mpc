@@ -64,7 +64,19 @@ public:
     commanded_vel_.setZero();
 
     mpc_block_ = std::make_shared<ControlBlock>(mpc_type_, motion_type_, n_threads_);
+    mpc_block_->createGait();
     mpc_block_->mpc_->switchToStand();
+    
+    RCLCPP_INFO(this->get_logger(), "u");
+    for (std::size_t i = 0; i < 12; ++i) {
+      RCLCPP_INFO(this->get_logger(), "u = %f", mpc_block_->mpc_->us_[0][i]);
+    }
+    RCLCPP_INFO(this->get_logger(), "x");
+    for (std::size_t i = 0; i < 37; ++i) {
+      RCLCPP_INFO(this->get_logger(), "x = %f", mpc_block_->mpc_->xs_[0][i]);
+    }
+    
+    RCLCPP_INFO(this->get_logger(), "Initialisation done");
   }
 
 private:
@@ -74,10 +86,15 @@ private:
   {  
     std_msgs::msg::Float64MultiArray multi_array_msg;
     // Reserve space for data
-    size_t total_size = 0;
-    for (const auto& vec : eigen_vectors) {
-        total_size += vec.size();
-    }
+    multi_array_msg.layout.dim.resize(2);
+    multi_array_msg.layout.dim[0].label = "dim0";
+    multi_array_msg.layout.dim[0].size = eigen_vectors.size();
+    multi_array_msg.layout.dim[0].stride = eigen_vectors.size() * sizeof(float);
+    multi_array_msg.layout.dim[1].label = "dim1";
+    multi_array_msg.layout.dim[1].size = eigen_vectors[0].size();
+    multi_array_msg.layout.dim[1].stride = eigen_vectors[0].size() * sizeof(float);
+    
+    size_t total_size = eigen_vectors[0].size() * eigen_vectors.size();
     multi_array_msg.data.reserve(total_size);
 
     // Copy the data from Eigen vectors into the message
@@ -95,10 +112,15 @@ private:
   {  
     std_msgs::msg::Int8MultiArray multi_array_msg;
     // Reserve space for data
-    size_t total_size = 0;
-    for (const auto& vec : eigen_vectors) {
-        total_size += vec.size();
-    }
+    multi_array_msg.layout.dim.resize(2);
+    multi_array_msg.layout.dim[0].label = "dim0";
+    multi_array_msg.layout.dim[0].size = eigen_vectors.size();
+    multi_array_msg.layout.dim[0].stride = eigen_vectors.size() * sizeof(int);
+    multi_array_msg.layout.dim[1].label = "dim1";
+    multi_array_msg.layout.dim[1].size = eigen_vectors[0].size();
+    multi_array_msg.layout.dim[1].stride = eigen_vectors[0].size() * sizeof(int);
+    
+    size_t total_size = eigen_vectors[0].size() * eigen_vectors.size();
     multi_array_msg.data.reserve(total_size);
 
     // Copy the data from Eigen vectors into the message
@@ -120,10 +142,10 @@ private:
     multi_array_msg.layout.dim.resize(2);
     multi_array_msg.layout.dim[0].label = "rows";
     multi_array_msg.layout.dim[0].size = eigen_matrix.rows();
-    multi_array_msg.layout.dim[0].stride = eigen_matrix.rows() * eigen_matrix.cols();
+    multi_array_msg.layout.dim[0].stride = eigen_matrix.rows() * sizeof(float);
     multi_array_msg.layout.dim[1].label = "cols";
     multi_array_msg.layout.dim[1].size = eigen_matrix.cols();
-    multi_array_msg.layout.dim[1].stride = eigen_matrix.cols();
+    multi_array_msg.layout.dim[1].stride = eigen_matrix.cols() * sizeof(float);
 
     // Reserve space for data
     multi_array_msg.data.reserve(eigen_matrix.size());
@@ -190,8 +212,8 @@ private:
     
     mpc_block_->mpc_->iterate(eigen_x0);
     
-    std::vector<Eigen::VectorXd> sub_xs = {mpc_block_->mpc_->xs_.begin(), mpc_block_->mpc_->xs_.begin() + 3}; 
-    std::vector<Eigen::VectorXd> sub_us = {mpc_block_->mpc_->us_.begin(), mpc_block_->mpc_->us_.begin() + 3}; 
+    std::vector<Eigen::VectorXd> sub_xs = {mpc_block_->mpc_->xs_.begin(), mpc_block_->mpc_->xs_.begin() + 4}; 
+    std::vector<Eigen::VectorXd> sub_us = {mpc_block_->mpc_->us_.begin(), mpc_block_->mpc_->us_.begin() + 4}; 
     trajectory.xs = convertVectorToFloat64MultiArray(sub_xs);
     trajectory.us = convertVectorToFloat64MultiArray(sub_us);
     
@@ -217,6 +239,7 @@ private:
 
     auto duration = this->get_clock()->now() - now;
     trajectory.process_duration = duration.nanoseconds() * 1e-9;
+    RCLCPP_INFO(this->get_logger(), "Publish trajectory");
     trajectory_pub_->publish(trajectory);
   }
 
