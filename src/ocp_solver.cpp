@@ -67,15 +67,6 @@ public:
     mpc_block_->createGait();
     mpc_block_->mpc_->switchToStand();
     
-    RCLCPP_INFO(this->get_logger(), "u");
-    for (std::size_t i = 0; i < 12; ++i) {
-      RCLCPP_INFO(this->get_logger(), "u = %f", mpc_block_->mpc_->us_[0][i]);
-    }
-    RCLCPP_INFO(this->get_logger(), "x");
-    for (std::size_t i = 0; i < 37; ++i) {
-      RCLCPP_INFO(this->get_logger(), "x = %f", mpc_block_->mpc_->xs_[0][i]);
-    }
-    
     RCLCPP_INFO(this->get_logger(), "Initialisation done");
   }
 
