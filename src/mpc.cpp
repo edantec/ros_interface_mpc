@@ -57,16 +57,16 @@ public:
       simple_mpc::FullDynamicsSettings problem_settings;
 
       Eigen::VectorXd w_x_vec(ndx);
-      w_x_vec << 0, 0, 0, 10., 10., 0, // Base pos/ori
-        1., 1., 1., 1., 1., 1.,    // FL FR leg
-        1., 1., 1., 1., 1., 1.,    // RL RR leg
-        10., 10., 10., 1., 1., 10.,  // Base vel
+      w_x_vec << 0, 0, 0, 0., 0., 0, // Base pos/ori
+        10., 10., 10., 10., 10., 10.,    // FL FR leg
+        10., 10., 10., 10., 10., 10.,    // RL RR leg
+        10., 10., 10., 10., 10., 10.,  // Base vel
         .1, .1, .1, .1, .1, .1,     // FL FR vel
         .1, .1, .1, .1, .1, .1;    // RL RR vel 
       Eigen::VectorXd w_cent(6);
-      w_cent << .1, .1, 1., 0.1, 0.1, 1;
+      w_cent << 0, 0, 0, 0, 0, 0;
       Eigen::VectorXd w_forces(3);
-      w_forces << 0.0002, 0.0002, 0.0002;
+      w_forces << 0.0001, 0.0001, 0.0001;
 
       Eigen::VectorXd u0 = Eigen::VectorXd::Zero(nu);
 
@@ -82,14 +82,14 @@ public:
       problem_settings.Kd_correction = Eigen::VectorXd::Zero(3);
       problem_settings.w_forces = Eigen::MatrixXd::Zero(3, 3);
       problem_settings.w_forces.diagonal() = w_forces;
-      problem_settings.w_frame = Eigen::MatrixXd::Identity(3, 3) * 5000;
+      problem_settings.w_frame = Eigen::MatrixXd::Identity(3, 3) * 1000;
       problem_settings.umin = -model_handler.getModel().effortLimit.tail(nu);
       problem_settings.umax = model_handler.getModel().effortLimit.tail(nu);
       problem_settings.qmin = model_handler.getModel().lowerPositionLimit.tail(nu);
       problem_settings.qmax = model_handler.getModel().upperPositionLimit.tail(nu);
       problem_settings.mu = 0.8;
-      problem_settings.Lfoot = 0.1;
-      problem_settings.Wfoot = 0.1;
+      problem_settings.Lfoot = 0.01;
+      problem_settings.Wfoot = 0.01;
       problem_settings.torque_limits = false;
       problem_settings.kinematics_limits = false;
       problem_settings.force_cone = false;
@@ -131,7 +131,7 @@ public:
       problem_settings.w_cent.diagonal() = w_cent_der;
       problem_settings.gravity = gravity;
       problem_settings.force_size = 3;
-      problem_settings.w_frame = Eigen::MatrixXd::Identity(3, 3) * 5000;
+      problem_settings.w_frame = Eigen::MatrixXd::Identity(3, 3) * 1000;
       problem_settings.qmin = model_handler.getModel().lowerPositionLimit.tail(nu);
       problem_settings.qmax = model_handler.getModel().upperPositionLimit.tail(nu);
       problem_settings.mu = 0.8;
@@ -141,10 +141,10 @@ public:
       problem_settings.force_cone = false;
 
       ocpPtr = std::make_shared<simple_mpc::KinodynamicsOCP>(problem_settings, model_handler);
-    }
+    } 
     size_t T = 50;
     ocpPtr->createProblem(model_handler.getReferenceState(), T, 3, gravity[2], false);
-    
+
     /// Create the MPC object
     simple_mpc::MPCSettings mpc_settings;
     if (motion_type_ == "walk") {
@@ -154,19 +154,20 @@ public:
     if (motion_type_ == "jump") {
       T_fly_ = 20;
       T_contact_ = 100;
-    }
+    } 
     mpc_settings.ddpIteration = 1;
     mpc_settings.support_force = -gravity[2] * model_handler.getMass();
     mpc_settings.TOL = 1e-4;
     mpc_settings.mu_init = 1e-8;
     mpc_settings.max_iters = 1;
-    mpc_settings.num_threads = n_threads;
+    mpc_settings.num_threads = 8;
     mpc_settings.swing_apex = 0.2;
     mpc_settings.T_fly = T_fly_;
     mpc_settings.T_contact = T_contact_;
     mpc_settings.timestep = 0.01;
 
     mpc_ = std::make_shared<simple_mpc::MPC>(mpc_settings, ocpPtr);
+
   }
 
   void createGait() {

@@ -32,13 +32,13 @@ class Go2Parameters():
 
         if (mpc_type == "fulldynamics"):
             # Weight for base position and orientation
-            w_basepos = [0, 0, 0, 10., 10., 0]
+            w_basepos = [0, 0, 0, 10., 10., 10.]
 
             # Weight for leg position (hip, thigh, ankle)
-            w_legpos = [1., 1., 1.]
+            w_legpos = [10., 10., 10.]
 
             # Weight for base linear and angular velocity
-            w_basevel = [10., 10., 10., 1., 1., 10.]
+            w_basevel = [10., 10., 10., 10., 10., 10.]
 
             # Weight for leg velocity (hip, thigh, ankle)
             w_legvel = [.1, .1, .1]
@@ -47,15 +47,15 @@ class Go2Parameters():
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
 
             # Weight for linear momentum regularization
-            w_cent_lin = np.array([.1, .1, 1.])
+            w_cent_lin = np.array([0, 0, 0])
             # Weight for angular momentum regularization
-            w_cent_ang = np.array([0.1, 0.1, 1])
+            w_cent_ang = np.array([0, 0, 0])
 
             # Weight for force regularization (reference is robot weight divided by nb of contacts)
-            w_forces_lin = np.array([0.0002, 0.0002, 0.0002])
+            w_forces_lin = np.array([0.0001, 0.0001, 0.0001])
 
             # Weight for feet position tracking
-            w_foot_tracking = 5000
+            w_foot_tracking = 1000
 
             nu = self.handler.getModel().nv - 6
 

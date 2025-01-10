@@ -34,23 +34,22 @@ class OCPSolverNode : public rclcpp::Node
 public:
   explicit OCPSolverNode()
   : Node("ocp_solver")
-    //qos_profile_(rclcpp::QoSProfile(rclcpp::QoSHistoryPolicy::KEEP_LAST, 1))
   {
-    this->declare_parameter("mpc_type", "fulldynamics");
-    this->declare_parameter("motion_type", "walk");
-    this->declare_parameter("n_threads", 8);
+    this->declare_parameter("mpc_type", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("motion_type", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("n_threads", rclcpp::PARAMETER_INTEGER);
     mpc_type_ = this->get_parameter("mpc_type").as_string();
     motion_type_ = this->get_parameter("motion_type").as_string();
     n_threads_ = this->get_parameter("n_threads").as_int();
     
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
-      "joy", 
+      "input", 
       rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data), 
       std::bind(&OCPSolverNode::joy_callback, this, std::placeholders::_1)
     );
     state_sub_ = this->create_subscription<ros_interface_mpc::msg::InitialState>(
       "initial_state", 
-      rclcpp::QoS(rclcpp::KeepLast(1)), 
+      rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data), 
       std::bind(&OCPSolverNode::state_callback, this, std::placeholders::_1)
     );
     trajectory_pub_ = this->create_publisher<ros_interface_mpc::msg::Trajectory>("trajectory", 1);
@@ -62,12 +61,13 @@ public:
 
     commanded_vel_.resize(6);
     commanded_vel_.setZero();
-
+    
     mpc_block_ = std::make_shared<ControlBlock>(mpc_type_, motion_type_, n_threads_);
     mpc_block_->createGait();
     mpc_block_->mpc_->switchToStand();
-    
-    RCLCPP_INFO(this->get_logger(), "Initialisation done");
+
+    nv_ = mpc_block_->mpc_->getModelHandler().getModel().nv;
+    force_dim_ = mpc_block_->mpc_->getModelHandler().getFeetNames().size() * 3;
   }
 
 private:
@@ -230,7 +230,6 @@ private:
 
     auto duration = this->get_clock()->now() - now;
     trajectory.process_duration = duration.nanoseconds() * 1e-9;
-    RCLCPP_INFO(this->get_logger(), "Publish trajectory");
     trajectory_pub_->publish(trajectory);
   }
 
@@ -255,6 +254,7 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<OCPSolverNode>();
+  RCLCPP_INFO(node->get_logger(), "Start spin");
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;

@@ -20,14 +20,16 @@
 
 using std::placeholders::_1;
 
-class MinimalSubscriber : public rclcpp::Node
+class InterpolatorController : public rclcpp::Node
 {
 public:
-  MinimalSubscriber()
-  : Node("minimal_subscriber")
+  InterpolatorController()
+  : Node("interpolator_controller")
   {
+    this->declare_parameter("mpc_type", rclcpp::PARAMETER_STRING);
+    mpc_type_ = this->get_parameter("mpc_type").as_string();
     subscription_ = this->create_subscription<std_msgs::msg::String>(
-      "topic", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
+      "topic", 10, std::bind(&InterpolatorController::topic_callback, this, _1));
   }
 
 private:
@@ -35,13 +37,14 @@ private:
   {
     RCLCPP_INFO(this->get_logger(), "I heard: '%s'", msg.data.c_str());
   }
+  std::string mpc_type_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
 };
 
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalSubscriber>());
+  rclcpp::spin(std::make_shared<InterpolatorController>());
   rclcpp::shutdown();
   return 0;
 }

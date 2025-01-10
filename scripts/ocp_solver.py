@@ -38,9 +38,9 @@ class OCPSolverNode(Node):
 
     def __init__(self):
         super().__init__('ocp_solver')
-        self.mpc_type = self.declare_parameter('mpc_type', 'fulldynamics').value
-        motion_type = self.declare_parameter('motion_type', 'walk').value
-        n_threads = self.declare_parameter('n_threads', 8).value
+        self.mpc_type = self.declare_parameter('mpc_type', rclpy.Parameter.Type.STRING).value
+        motion_type = self.declare_parameter('motion_type', rclpy.Parameter.Type.STRING).value
+        n_threads = self.declare_parameter('n_threads', rclpy.Parameter.Type.INTEGER).value
 
         qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
 
