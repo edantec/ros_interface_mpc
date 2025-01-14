@@ -117,7 +117,7 @@ public:
     MPC_timestep_ = 0.01;
 
     // Define state publisher
-    trajectory_pub_ = this->create_publisher<ros_interface_mpc::msg::InitialState>(
+    state_pub_ = this->create_publisher<ros_interface_mpc::msg::InitialState>(
       "initial_state", rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data));
 
     // Define subscriber
@@ -147,6 +147,11 @@ public:
     settings.verbose=false;
 
     qp_ = std::make_shared<simple_mpc::IDSolver>(settings, model_handler.getModel());
+    
+    // TODO: Create the robot interface and start the control loop
+    // robotIf = Go2RobotInterface();
+    // robotIf.start_async(default_standing_q.tail(nu_));
+    // robotIf.register_callback(control_loop);
   }
 
 private:
@@ -312,6 +317,25 @@ private:
         torque_command_ = qp_->solved_torque_;
       }
     }
+
+    // TODO: send low-level command through the robot interface
+    if (true) {//if (robotIf.is_ready) {
+      //robotIf.send_command(joint_command_,
+      //                     velocity_command_,
+      //                     torque_command_,
+      //                     Kp_,
+      //                     Kd_
+      //);
+            
+      auto state = ros_interface_mpc::msg::InitialState();
+      state.stamp.sec = static_cast<int>(t);
+      state.stamp.nanosec = (t - static_cast<int>(t)) * 1e9;
+      state.x0.reserve(x_measured_.size());
+      for (long int i = 0; i < x_measured_.size(); i++) {
+        state.x0[i] = x_measured_[i];
+      }
+      state_pub_->publish(state);
+  }
   }
   
   double t_odom_update_;
@@ -356,7 +380,7 @@ private:
   // ROS topics
   rclcpp::Subscription<ros_interface_mpc::msg::Trajectory>::SharedPtr subscription_joints_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_odom_;
-  rclcpp::Publisher<ros_interface_mpc::msg::InitialState>::SharedPtr trajectory_pub_;
+  rclcpp::Publisher<ros_interface_mpc::msg::InitialState>::SharedPtr state_pub_;
 };
 
 int main(int argc, char * argv[])
