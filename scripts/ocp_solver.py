@@ -38,9 +38,9 @@ class OCPSolverNode(Node):
 
     def __init__(self):
         super().__init__('ocp_solver')
-        self.mpc_type = self.declare_parameter('mpc_type').value
-        motion_type = self.declare_parameter('motion_type').value
-        n_threads = self.declare_parameter('n_threads').value
+        self.mpc_type = self.declare_parameter('mpc_type', rclpy.Parameter.Type.STRING).value
+        motion_type = self.declare_parameter('motion_type', rclpy.Parameter.Type.STRING).value
+        n_threads = self.declare_parameter('n_threads', rclpy.Parameter.Type.INTEGER).value
 
         qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
 
@@ -109,6 +109,7 @@ class OCPSolverNode(Node):
 
         self.traj_msg.stamp = stamp
         self.mpc_block.update_mpc(x0)
+        
         self.traj_msg.xs = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.xs[:4])
         self.traj_msg.us = listof_numpy_to_multiarray_float64(self.mpc_block.mpc.us[:4])
         if self.mpc_type == "fulldynamics":
@@ -118,11 +119,11 @@ class OCPSolverNode(Node):
             forces = []
             contact_states = []
             for i in range(4):
-                a = self.mpc_block.mpc.getSolver().workspace.problem_data.stage_data[i].dynamics_data.continuous_data.xdot[self.nv:]
+                a = self.mpc_block.mpc.getStateDerivative(0)[self.nv:].copy()
                 a[6:] = self.mpc_block.mpc.us[i][self.force_dim:]
                 accs.append(a)
                 forces.append(self.mpc_block.mpc.us[i][:self.force_dim])
-                contact_states.append(self.mpc_block.mpc.getTrajOptProblem().stages[i].dynamics.differential_dynamics.contact_states)
+                contact_states.append(self.mpc_block.mpc.ocp_handler.getContactState(i))
 
             self.traj_msg.ddqs = listof_numpy_to_multiarray_float64(accs)
             self.traj_msg.forces = listof_numpy_to_multiarray_float64(forces)

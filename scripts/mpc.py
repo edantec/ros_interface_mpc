@@ -6,57 +6,24 @@ The contacts forces are modeled as 6D wrenches.
 
 import numpy as np
 import example_robot_data
-from simple_mpc import RobotHandler, FullDynamicsOCP, KinodynamicsOCP, MPC
+from simple_mpc import RobotModelHandler, RobotDataHandler, FullDynamicsOCP, KinodynamicsOCP, MPC
+import pinocchio as pin
 
 class Go2Parameters():
     def __init__(self, mpc_type):
         print(mpc_type)
-
+        
+        self.rmodel = example_robot_data.load("go2").model
         SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
         URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
-        modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
-        design_conf = dict(
-            urdf_path=modelPath + URDF_SUBPATH,
-            srdf_path=modelPath + SRDF_SUBPATH,
-            robot_description="",
-            root_name="base",
-            base_configuration="standing",
-            controlled_joints_names=[
-                "root_joint",
-                "FL_hip_joint",
-                "FL_thigh_joint",
-                "FL_calf_joint",
-                "FR_hip_joint",
-                "FR_thigh_joint",
-                "FR_calf_joint",
-                "RL_hip_joint",
-                "RL_thigh_joint",
-                "RL_calf_joint",
-                "RR_hip_joint",
-                "RR_thigh_joint",
-                "RR_calf_joint",
-            ],
-            end_effector_names=[
-                "FL_foot",
-                "FR_foot",
-                "RL_foot",
-                "RR_foot",
-            ],
-            hip_names=[
-                "FL_thigh",
-                "FR_thigh",
-                "RL_thigh",
-                "RR_thigh",
-            ],
-            feet_to_base_trans=[
-                np.array([0.2, 0.17, 0.]),
-                np.array([0.2, -0.17, 0.]),
-                np.array([-0.2, 0.17, 0.]),
-                np.array([-0.2, -0.17, 0.]),
-            ]
-        )
-        self.handler = RobotHandler()
-        self.handler.initialize(design_conf)
+        base_joint_name ="root_joint"
+        
+        self.handler = RobotModelHandler(self.rmodel, "standing", base_joint_name)
+        self.handler.addFoot("FL_foot", base_joint_name, pin.XYZQUATToSE3(np.array([ 0.17, 0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("FR_foot", base_joint_name, pin.XYZQUATToSE3(np.array([ 0.17,-0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("RL_foot", base_joint_name, pin.XYZQUATToSE3(np.array([-0.24, 0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("RR_foot", base_joint_name, pin.XYZQUATToSE3(np.array([-0.24,-0.15, 0.0, 0,0,0,1])))
+        self.data_handler = RobotDataHandler(self.handler)
 
         gravity = np.array([0, 0, -9.81])
         u0_forces = np.zeros(self.handler.getModel().nv + 6)
@@ -65,13 +32,13 @@ class Go2Parameters():
 
         if (mpc_type == "fulldynamics"):
             # Weight for base position and orientation
-            w_basepos = [0, 0, 0, 10., 10., 0]
+            w_basepos = [0, 0, 0, 10., 10., 10.]
 
             # Weight for leg position (hip, thigh, ankle)
-            w_legpos = [1., 1., 1.]
+            w_legpos = [10., 10., 10.]
 
             # Weight for base linear and angular velocity
-            w_basevel = [10., 10., 10., 1., 1., 10.]
+            w_basevel = [10., 10., 10., 10., 10., 10.]
 
             # Weight for leg velocity (hip, thigh, ankle)
             w_legvel = [.1, .1, .1]
@@ -80,15 +47,15 @@ class Go2Parameters():
             w_x = np.array(w_basepos + w_legpos * 4 + w_basevel + w_legvel * 4)
 
             # Weight for linear momentum regularization
-            w_cent_lin = np.array([.1, .1, 1.])
+            w_cent_lin = np.array([0, 0, 0])
             # Weight for angular momentum regularization
-            w_cent_ang = np.array([0.1, 0.1, 1])
+            w_cent_ang = np.array([0, 0, 0])
 
             # Weight for force regularization (reference is robot weight divided by nb of contacts)
-            w_forces_lin = np.array([0.0002, 0.0002, 0.0002])
+            w_forces_lin = np.array([0.0001, 0.0001, 0.0001])
 
             # Weight for feet position tracking
-            w_foot_tracking = 5000
+            w_foot_tracking = 1000
 
             nu = self.handler.getModel().nv - 6
 
@@ -101,8 +68,8 @@ class Go2Parameters():
                 force_size=3,
                 w_forces=np.diag(w_forces_lin),
                 w_frame=np.eye(3) * w_foot_tracking,
-                umin=self.handler.getModel().lowerEffortLimit[6:],
-                umax=self.handler.getModel().upperEffortLimit[6:],
+                umin=-self.handler.getModel().effortLimit[6:],
+                umax=self.handler.getModel().effortLimit[6:],
                 qmin=self.handler.getModel().lowerPositionLimit[7:],
                 qmax=self.handler.getModel().upperPositionLimit[7:],
                 Kp_correction=np.array([0, 0, 0]),
@@ -119,7 +86,7 @@ class Go2Parameters():
             w_basepos = [0, 0, 10., 100., 100., 0]
 
             # Weight for leg position (hip, thigh, ankle)
-            w_legpos = [10., 10., 10.]
+            w_legpos = [1., 1., 1.]
 
             # Weight for base linear and angular velocity
             w_basevel = [10., 10., 10., 1., 1., 10.]
@@ -145,7 +112,7 @@ class Go2Parameters():
             ))
 
             # Weight for feet position tracking
-            w_foot_tracking = 4000
+            w_foot_tracking = 6000
 
             # Weight for linear momentum regularization
             w_cent_lin = np.array([0.1, 0.1, 1])
@@ -193,15 +160,15 @@ class ControlBlockGo2():
         self.param = Go2Parameters(mpc_type)
         self.motion = motion
         self.T = 50
-
+        
         if mpc_type == "fulldynamics":
             problem = FullDynamicsOCP(self.param.problem_conf, self.param.handler)
         elif mpc_type == "kinodynamics":
             problem = KinodynamicsOCP(self.param.problem_conf, self.param.handler)
-        problem.createProblem(self.param.handler.getState(), self.T, 3, self.param.problem_conf["gravity"][2], False)
+        problem.createProblem(self.param.handler.getReferenceState(), self.T, 3, self.param.problem_conf["gravity"][2], False)
 
         if self.motion == "walk":
-            self.T_fly = 20
+            self.T_fly = 30
             self.T_contact = 5
         elif self.motion == "jump":
             self.T_fly = 20
@@ -219,8 +186,7 @@ class ControlBlockGo2():
             timestep=0.01,
         )
 
-        self.mpc = MPC()
-        self.mpc.initialize(mpc_conf, problem)
+        self.mpc = MPC(mpc_conf, problem)
         self.nq = self.param.handler.getModel().nq
 
     def create_gait(self):
@@ -263,4 +229,4 @@ class ControlBlockGo2():
         self.mpc.generateCycleHorizon(contact_phases)
 
     def update_mpc(self, x_measured):
-        self.mpc.iterate(x_measured[:self.nq],x_measured[self.nq:])
+        self.mpc.iterate(x_measured)

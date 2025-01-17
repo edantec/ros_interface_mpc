@@ -6,13 +6,17 @@
   <description>A ROS interface for optimal control</description>
   <maintainer email="ewen.dantec@inria.fr">edantec</maintainer>
   <license>Apache-2.0</license>
-
+  
+  <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
   <depend>builtin_interfaces</depend>
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>tf2</exec_depend>
   <exec_depend>simple-mpc</exec_depend>
+  <exec_depend>aligator</exec_depend>
   <exec_depend>example-robot-data</exec_depend>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

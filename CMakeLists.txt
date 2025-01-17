@@ -9,8 +9,17 @@ endif()
 find_package(ament_cmake REQUIRED)
 
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(pinocchio REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(example-robot-data REQUIRED)
+find_package(ndcurves REQUIRED)
+find_package(simple-mpc REQUIRED)
+find_package(proxsuite-nlp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 # Build msgs
@@ -22,17 +31,39 @@ set(msg_files
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
-  DEPENDENCIES builtin_interfaces std_msgs geometry_msgs
+  DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs tf2_ros pinocchio
 )
 
 # Install Python modules
 ament_python_install_package(${PROJECT_NAME}_utils)
+
+# Instal C++ modules
+add_library(mpc_block src/mpc.cpp)
+target_link_libraries(mpc_block example-robot-data::example-robot-data pinocchio::pinocchio ndcurves::ndcurves simple-mpc::simple-mpc)
+add_executable(ocp_solver src/ocp_solver.cpp)
+target_link_libraries(ocp_solver mpc_block)
+ament_target_dependencies(ocp_solver rclcpp std_msgs tf2_ros nav_msgs)
+add_executable(interpolator src/interpolator_controller.cpp)
+target_link_libraries(interpolator example-robot-data::example-robot-data pinocchio::pinocchio proxsuite-nlp::proxsuite-nlp simple-mpc::simple-mpc)
+ament_target_dependencies(interpolator rclcpp std_msgs tf2_ros nav_msgs)
+
+rosidl_target_interfaces(ocp_solver 
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+rosidl_target_interfaces(interpolator 
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # Install Python executables
 install(PROGRAMS
   scripts/ocp_solver.py
   scripts/interpolator_controller.py
   scripts/mpc.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS
+  ocp_solver
+  interpolator
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -16,8 +16,9 @@ from std_msgs.msg import Float64MultiArray, Float64
 
 from go2_control_interface.robot_interface import Go2RobotInterface
 from proxsuite_nlp import manifolds
-from simple_mpc import IDSolver, RobotHandler
+from simple_mpc import IDSolver, RobotModelHandler, RobotDataHandler
 import example_robot_data
+import pinocchio as pin
 
 class InterpolatorControllerNode(Node):
 
@@ -33,50 +34,14 @@ class InterpolatorControllerNode(Node):
         self.rmodel = example_robot_data.load("go2").model
         SRDF_SUBPATH = "/go2_description/srdf/go2.srdf"
         URDF_SUBPATH = "/go2_description/urdf/go2.urdf"
-        modelPath = example_robot_data.getModelPath(URDF_SUBPATH)
+        base_joint_name ="root_joint"
 
-        design_conf = dict(
-            urdf_path=modelPath + URDF_SUBPATH,
-            srdf_path=modelPath + SRDF_SUBPATH,
-            robot_description="",
-            root_name="root_joint",
-            base_configuration="standing",
-            controlled_joints_names=[
-                "root_joint",
-                "FL_hip_joint",
-                "FL_thigh_joint",
-                "FL_calf_joint",
-                "FR_hip_joint",
-                "FR_thigh_joint",
-                "FR_calf_joint",
-                "RL_hip_joint",
-                "RL_thigh_joint",
-                "RL_calf_joint",
-                "RR_hip_joint",
-                "RR_thigh_joint",
-                "RR_calf_joint",
-            ],
-            end_effector_names=[
-                "FL_foot",
-                "FR_foot",
-                "RL_foot",
-                "RR_foot",
-            ],
-            hip_names=[
-                "FL_thigh",
-                "FR_thigh",
-                "RL_thigh",
-                "RR_thigh",
-            ],
-            feet_to_base_trans=[
-                np.array([0.2, 0.1, 0.]),
-                np.array([0.2, -0.1, 0.]),
-                np.array([-0.2, 0.1, 0.]),
-                np.array([-0.2, -0.1, 0.]),
-            ]
-        )
-        self.handler = RobotHandler()
-        self.handler.initialize(design_conf)
+        self.handler = RobotModelHandler(self.rmodel, "standing", base_joint_name)
+        self.handler.addFoot("FL_foot", base_joint_name, pin.XYZQUATToSE3(np.array([ 0.17, 0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("FR_foot", base_joint_name, pin.XYZQUATToSE3(np.array([ 0.17,-0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("RL_foot", base_joint_name, pin.XYZQUATToSE3(np.array([-0.24, 0.15, 0.0, 0,0,0,1])))
+        self.handler.addFoot("RR_foot", base_joint_name, pin.XYZQUATToSE3(np.array([-0.24,-0.15, 0.0, 0,0,0,1])))
+        self.data_handler = RobotDataHandler(self.handler)
 
         # Define state publisher
         qos_profile_keeplast = QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
@@ -180,6 +145,7 @@ class InterpolatorControllerNode(Node):
         self.debug_comm_time_new_msg = True
         self.debug_comm_time_process_time = msg.process_duration
 
+
     def odometry_callback(self, msg):
         t_meas = rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
 
@@ -214,7 +180,7 @@ class InterpolatorControllerNode(Node):
         x_measured = np.concatenate((self.base_pose, q, self.base_vel, v))
 
         if self.start_mpc:
-            self.Kp = [10.]*self.nu
+            self.Kp = [100.]*self.nu
             self.Kd = (np.sqrt(self.Kp)).tolist()
 
             step_nb = int(delay // self.MPC_timestep)
@@ -242,15 +208,15 @@ class InterpolatorControllerNode(Node):
                 else:
                     a_interpolated = self.ddqs[step_nb + 1] * step_progress  + self.ddqs[step_nb] * (1. - step_progress)
                     forces_interpolated = self.forces[step_nb + 1] * step_progress  + self.forces[step_nb] * (1. - step_progress)
-                self.handler.updateState(x_measured[:self.nq], x_measured[self.nq:], True)
+                self.data_handler.updateInternalData(x_measured, True)
                 self.qp.solveQP(
-                    self.handler.getData(),
+                    self.data_handler.getData(),
                     [bool(self.contact_states[step_nb][i]) for i in range(4)],
                     x_measured[self.nq:],
                     a_interpolated,
                     np.zeros(self.nu),
                     forces_interpolated,
-                    self.handler.getMassMatrix(),
+                    self.data_handler.getData().M,
                 )
                 self.torqueCommand = self.qp.solved_torque
 
@@ -273,8 +239,8 @@ class InterpolatorControllerNode(Node):
         ############################
 
         # # Log delay
-        # self.debug_loop_time_msg.data = delay
-        # self.debug_loop_time_pub.publish(self.debug_loop_time_msg)
+        self.debug_loop_time_msg.data = delay
+        self.debug_loop_time_pub.publish(self.debug_loop_time_msg)
 
         # # Log filtered state
         # debug_msg = Float64MultiArray()
@@ -282,10 +248,10 @@ class InterpolatorControllerNode(Node):
         # self.debug_filter_pub.publish(debug_msg)
 
         # Log communication time
-        # if(self.debug_comm_time_new_msg):
-        #     self.debug_comm_time_new_msg = False
-        #     self.debug_comm_time_msg.data = delay - self.debug_comm_time_process_time
-        #     self.debug_comm_time_pub.publish(self.debug_comm_time_msg)
+        if(self.debug_comm_time_new_msg):
+             self.debug_comm_time_new_msg = False
+             self.debug_comm_time_msg.data = delay - self.debug_comm_time_process_time
+             self.debug_comm_time_pub.publish(self.debug_comm_time_msg)
 
 def main(args=None):
     rclpy.init(args=args)
